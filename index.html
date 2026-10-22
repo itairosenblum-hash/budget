@@ -327,7 +327,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 16:55</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 17:00</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -2035,9 +2035,32 @@ $("btnDeleteInvoice").onclick = () => {
    האחוזים אמיתיים בזמן ההעלאה (XHR), ובשלבים שבהם השרת עובד (קריאת AI, שמירה)
    הם מתקדמים לאט עד הסוף — כדי שתמיד יהיה ברור שמשהו קורה.
    ===================================================================== */
+/* מסך דולק: כל עוד יש טעינה/שמירה/העלאה של קובץ — הטלפון לא נכבה ולא ננעל (Screen Wake Lock).
+   מונה פעולות: המסך משתחרר רק כשכל הפעולות הסתיימו. */
+const awake = {
+  count: 0, lock: null, owned: false,
+  async grab(){
+    if (this.lock || !("wakeLock" in navigator) || document.visibilityState !== "visible") return;
+    try{
+      this.lock = await navigator.wakeLock.request("screen");
+      this.lock.addEventListener("release", () => { this.lock = null; });
+      if (!this.count) this.drop();   // הפעולה הסתיימה בזמן שחיכינו
+    }catch(e){ this.lock = null; }
+  },
+  drop(){ const l = this.lock; this.lock = null; l?.release().catch(() => {}); },
+  start(){ this.count++; this.grab(); },
+  stop(){ this.count = Math.max(0, this.count - 1); if (!this.count) this.drop(); },
+  // מצב של אנימציית המנוף (פתוחה/סגורה) — נספר כפעולה אחת
+  hold(on){ if (on && !this.owned){ this.owned = true; this.start(); } else if (!on && this.owned){ this.owned = false; this.stop(); } },
+  async during(fn){ this.start(); try{ return await fn(); } finally{ this.stop(); } },
+};
+// כשחוזרים לאפליקציה באמצע פעולה — הדפדפן משחרר את הנעילה ברקע, אז מבקשים שוב
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && awake.count) awake.grab(); });
+
 const lift = {
   target: 0, shown: 0, creepTo: 0, timer: null, hideTimer: null,
   show(title, status){
+    awake.hold(true);
     clearTimeout(this.hideTimer);
     const ov = $("liftOverlay");
     ov.classList.remove("done", "fail");
@@ -2074,12 +2097,14 @@ const lift = {
   },
   fail(message){
     clearInterval(this.timer);
+    awake.hold(false);
     $("liftOverlay").classList.add("fail");
     this.status(message || "הפעולה נכשלה");
     $("liftClose").style.display = "";
   },
   hide(){
     clearInterval(this.timer);
+    awake.hold(false);
     const ov = $("liftOverlay");
     ov.classList.remove("show"); ov.setAttribute("aria-hidden", "true");
   },
@@ -2091,7 +2116,8 @@ function fmtSize(bytes){
 
 /* קריאה לפונקציה בענן עם מדד התקדמות אמיתי של ההעלאה וההורדה (כמו ב-TripCost).
    זה אותו פרוטוקול של httpsCallable: POST {data} ← {result} / {error}. */
-async function callWithProgress(name, data, { onUp, onDown, timeout = 300000 } = {}){
+function callWithProgress(name, data, opts){ return awake.during(() => callWithProgressRaw(name, data, opts)); }
+async function callWithProgressRaw(name, data, { onUp, onDown, timeout = 300000 } = {}){
   if (!cloudUser) throw Object.assign(new Error("לא מחובר"), { code: "functions/unauthenticated" });
   const token = await cloudUser.getIdToken();
   const projectId = (loadFirebaseConfig() || {}).projectId;
