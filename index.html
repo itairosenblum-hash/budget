@@ -95,9 +95,11 @@
   #syncStatusLine.err .dot{background:var(--danger);}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
 
-  .tabs{display:flex;gap:6px;overflow-x:auto;padding:12px 2px 4px;scrollbar-width:none;}
-  .tabs::-webkit-scrollbar{display:none;}
-  .tab-chip{flex:none;border:1px solid var(--border);background:var(--card);color:var(--ink-soft);border-radius:var(--radius-pill);padding:8px 12px;font-size:14.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;}
+  /* ארבעה כפתורים בשתי שורות: חברות | תקציב / הזמנות 1007 | חשבוניות (מימין לשמאל) */
+  .tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 0 4px;}
+  .tab-chip{border:1px solid var(--border);background:var(--card);color:var(--ink-soft);border-radius:14px;padding:11px 12px;font-size:15.5px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;box-shadow:var(--shadow);}
+  .tab-chip > span:nth-child(2){white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  @media (min-width: 900px){ .tabs{grid-template-columns:repeat(4, 1fr);} }
   .tab-chip .count{font-size:12px;background:var(--card-2);border-radius:99px;padding:0 7px;}
   .tab-chip.active{background:var(--pri);border-color:var(--pri);color:#fff;}
   .tab-chip.active .count{background:rgba(255,255,255,.2);}
@@ -251,6 +253,44 @@
   table.ledger .ltr{direction:ltr;text-align:right;}
   table.ledger .muted{color:var(--ink-soft);}
   .pill-open{font-size:11.5px;font-weight:800;background:var(--card-2);color:var(--ink-soft);border-radius:99px;padding:1px 7px;}
+  /* ---- Upload animation (crane carrying the file into the cloud) ---- */
+  .lift-overlay{position:fixed;inset:0;z-index:80;background:rgba(21,25,18,.55);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s;}
+  .lift-overlay.show{opacity:1;pointer-events:auto;}
+  .lift-card{background:var(--bg);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow);width:100%;max-width:380px;padding:18px 18px 20px;text-align:center;}
+  .lift-title{font-family:'Frank Ruhl Libre',serif;font-weight:900;font-size:19px;color:var(--pri-dark);}
+  .lift-svg{width:100%;height:auto;display:block;margin:6px 0 2px;}
+  .lift-pct{font-weight:900;font-size:40px;line-height:1;color:var(--ink);}
+  .lift-pct small{font-size:20px;color:var(--ink-soft);margin-right:2px;}
+  .lift-bar{height:10px;border-radius:99px;background:var(--card-2);border:1px solid var(--border);overflow:hidden;margin:10px 0 8px;}
+  .lift-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--amber),var(--pri));transition:width .15s linear;}
+  .lift-status{font-size:14.5px;font-weight:700;color:var(--ink-soft);min-height:22px;}
+  .lift-overlay.fail .lift-status{color:var(--danger);}
+  .lift-overlay.done .lift-status{color:var(--good);}
+  .l-ground{fill:var(--border);}
+  .l-steel{fill:#E0A526;} .l-steel-dark{fill:#9C7414;} .l-weight{fill:#6B6A60;}
+  .l-lattice{fill:none;stroke:#9C7414;stroke-width:1.6;stroke-linejoin:round;}
+  .l-tie{fill:none;stroke:#6B6A60;stroke-width:1.4;}
+  .l-cab{fill:#E0A526;stroke:#9C7414;stroke-width:1.2;} .l-cab-glass{fill:#BFE3F2;}
+  .l-trolley{fill:#3A3A36;} .l-cable{fill:#3A3A36;}
+  .l-hook{fill:none;stroke:#3A3A36;stroke-width:1.8;stroke-linecap:round;}
+  .l-doc{fill:#fff;stroke:var(--pri);stroke-width:1.8;stroke-linejoin:round;}
+  .l-doc-fold{fill:none;stroke:var(--pri);stroke-width:1.6;stroke-linejoin:round;}
+  .l-doc-lines{fill:none;stroke:var(--amber);stroke-width:1.8;stroke-linecap:round;}
+  .l-cloud-body{fill:var(--pri-tint);stroke:var(--pri);stroke-width:2;}
+  .l-cloud-arrow{fill:none;stroke:var(--pri);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+  .l-device-body{fill:var(--card-2);stroke:var(--ink-soft);stroke-width:2;} .l-device-screen{fill:var(--card);} .l-device-btn{fill:var(--ink-soft);}
+  .lift-overlay.show .l-load{animation:liftMove 3.2s ease-in-out infinite;}
+  .lift-overlay.show .l-cable{transform-box:fill-box;transform-origin:50% 0;animation:liftCable 3.2s ease-in-out infinite;}
+  .lift-overlay.show .l-crate{animation:liftCrate 3.2s ease-in-out infinite;}
+  .lift-overlay.show .l-cloud{transform-box:fill-box;transform-origin:center;animation:liftCloud 3.2s ease-in-out infinite;}
+  .lift-overlay.done .l-load, .lift-overlay.done .l-cable, .lift-overlay.done .l-crate, .lift-overlay.fail .l-load, .lift-overlay.fail .l-cable, .lift-overlay.fail .l-crate{animation-play-state:paused;}
+  @keyframes liftMove{0%,15%{transform:translateX(0)}55%,78%{transform:translateX(-144px)}100%{transform:translateX(0)}}
+  @keyframes liftCable{0%{transform:scaleY(1)}15%,55%{transform:scaleY(.35)}70%,78%{transform:scaleY(.74)}90%,100%{transform:scaleY(1)}}
+  @keyframes liftCrate{0%{transform:translateY(0);opacity:1}15%,55%{transform:translateY(-30px);opacity:1}70%{transform:translateY(-12px);opacity:1}78%{transform:translateY(-12px);opacity:0}96%{transform:translateY(0);opacity:0}100%{transform:translateY(0);opacity:1}}
+  @keyframes liftCloud{0%,70%{transform:scale(1)}78%{transform:scale(1.08)}88%,100%{transform:scale(1)}}
+  @media (prefers-reduced-motion: reduce){
+    .lift-overlay.show .l-load, .lift-overlay.show .l-cable, .lift-overlay.show .l-crate, .lift-overlay.show .l-cloud{animation:none;}
+  }
   #versionFooter{text-align:center;font-size:12px;color:var(--ink-soft);padding:24px 10px 10px;}
 
   @media (min-width: 1000px){
@@ -287,7 +327,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 12:55</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 13:05</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -491,6 +531,55 @@
   </div>
 </div>
 
+<!-- Upload animation: a crane lifts the document from the device into the cloud -->
+<div class="lift-overlay" id="liftOverlay" aria-hidden="true">
+  <div class="lift-card" role="status" aria-live="polite">
+    <div class="lift-title" id="liftTitle">מעלה קובץ</div>
+    <svg class="lift-svg" viewBox="0 0 320 170" aria-hidden="true">
+      <!-- ground -->
+      <rect x="10" y="158" width="300" height="4" rx="2" class="l-ground"/>
+      <!-- cloud (destination) -->
+      <g class="l-cloud">
+        <path d="M40 112 a16 16 0 0 1 4-31 a22 22 0 0 1 41-6 a17 17 0 0 1 22 15 a12 12 0 0 1-3 22 z" class="l-cloud-body"/>
+        <path d="M73 96 v-12 m-6 6 l6-6 l6 6" class="l-cloud-arrow"/>
+      </g>
+      <!-- device (source) -->
+      <g class="l-device">
+        <rect x="200" y="118" width="34" height="40" rx="5" class="l-device-body"/>
+        <rect x="205" y="124" width="24" height="26" rx="2" class="l-device-screen"/>
+        <circle cx="217" cy="154" r="1.8" class="l-device-btn"/>
+      </g>
+      <!-- tower crane -->
+      <g class="l-crane">
+        <rect x="262" y="40" width="12" height="118" class="l-steel"/>
+        <path d="M262 52 l12 12 l-12 12 l12 12 l-12 12 l12 12 l-12 12 l12 12 l-12 12" class="l-lattice"/>
+        <rect x="250" y="152" width="36" height="6" rx="2" class="l-steel-dark"/>
+        <rect x="24" y="36" width="282" height="8" class="l-steel"/>
+        <path d="M30 44 l10-8 l10 8 l10-8 l10 8 l10-8 l10 8 l10-8 l10 8 l10-8 l10 8 l10-8 l10 8 l10-8 l10 8 l10-8 l10 8 l10-8 l10 8 l10-8 l10 8 l10-8 l10 8 l10-8 l10 8" class="l-lattice"/>
+        <path d="M268 36 L268 14 M268 14 L40 36 M268 14 L304 36" class="l-tie"/>
+        <rect x="284" y="44" width="20" height="14" rx="2" class="l-weight"/>
+        <rect x="256" y="44" width="24" height="16" rx="3" class="l-cab"/>
+        <rect x="260" y="47" width="10" height="7" rx="1" class="l-cab-glass"/>
+      </g>
+      <!-- moving load: trolley + cable + crate -->
+      <g class="l-load">
+        <rect x="207" y="44" width="20" height="7" rx="2" class="l-trolley"/>
+        <rect x="216.2" y="51" width="1.6" height="46" class="l-cable"/>
+        <g class="l-crate">
+          <path d="M213 97 v-3 h8 v3" class="l-hook"/>
+          <path d="M208 97 h12 l6 6 v16 h-18 z" class="l-doc"/>
+          <path d="M220 97 v6 h6" class="l-doc-fold"/>
+          <path d="M211 107 h11 M211 111 h11 M211 115 h7" class="l-doc-lines"/>
+        </g>
+      </g>
+    </svg>
+    <div class="lift-pct tnum"><span id="liftPct">0</span><small>%</small></div>
+    <div class="lift-bar"><i id="liftBar"></i></div>
+    <div class="lift-status" id="liftStatus">מתחיל…</div>
+    <button class="btn-ghost" id="liftClose" type="button" style="display:none;margin-top:12px;">סגירה</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -515,10 +604,11 @@ const DEFAULT_FIREBASE_CONFIG = {
   appId: "1:920210124583:web:54900018633a831e72c302"
 };
 
+// סדר הכפתורים (מימין לשמאל, שתי שורות): חברות | תקציב / הזמנות 1007 | חשבוניות
 const TABS = [
-  { id: "budget",    label: "תקציב", icon: "📊" },
-  { id: "orders",    label: "הזמנות 1007", icon: "📄" },
   { id: "companies", label: "חברות",       icon: "🏢" },
+  { id: "budget",    label: "תקציב",       icon: "📊" },
+  { id: "orders",    label: "הזמנות 1007", icon: "📄" },
   { id: "invoices",  label: "חשבוניות",    icon: "🧾" },
 ];
 
@@ -1841,15 +1931,25 @@ async function scanPendingFile(){
   if (!fbFunctions || !cloudUser){ toast("לקריאה אוטומטית צריך להתחבר (שורת הסנכרון למעלה)"); return; }
   scanning = true;
   const btn = $("btnScanFile"); btn.classList.add("busy"); btn.textContent = "⏳ קורא את החשבונית...";
+  lift.show("סריקת חשבונית", "מכין את הקובץ…");
   try{
-    const call = fbFunctions.httpsCallable("scanInvoice", { timeout: 300000 });
-    const { data: r } = await call({ data: await blobToBase64(pendingFile), mimeType: pendingFile.type });
+    lift.set(0.04);
+    const payload = { data: await blobToBase64(pendingFile), mimeType: pendingFile.type };
+    const size = fmtSize(pendingFile.size);
+    lift.creep(0.45, `מעלה את החשבונית… (${size})`);
+    // אחרי כמה שניות בלי סיום — כנראה כבר בשלב הקריאה בשרת
+    const t = setTimeout(() => lift.creep(0.96, "ה-AI קורא את החשבונית…"), 6000);
+    const { data: r } = await callWithProgress("scanInvoice", payload, { onUp: f => {
+      if (f < 1) lift.set(0.05 + f * 0.5, `מעלה את החשבונית… (${size})`);
+      else { lift.set(0.55); lift.creep(0.96, "ה-AI קורא את החשבונית…"); }
+    } }).finally(() => clearTimeout(t));
     applyScan(r);
-    toast("החשבונית נקראה ✓ — כדאי לעבור על הפרטים");
+    await lift.done("החשבונית נקראה ✓", 700);
+    toast("כדאי לעבור על הפרטים ✓");
   }catch(e){
     console.error(e);
-    const notDeployed = /not-found|internal/.test(e?.code || "") && !e?.details;
-    toast(notDeployed ? "שירות הקריאה עוד לא הופעל (צריך להגדיר את מפתח ה-Gemini)" : (e?.message || "הקריאה נכשלה — אפשר למלא ידנית"));
+    const notDeployed = /not-found|internal/.test(e?.code || "") && !e?.details && !e?.message;
+    lift.fail(notDeployed ? "שירות הקריאה עוד לא הופעל" : (e?.message || "הקריאה נכשלה — אפשר למלא ידנית"));
   }finally{
     scanning = false; btn.classList.remove("busy"); btn.textContent = "✨ קריאה אוטומטית";
   }
@@ -1909,7 +2009,7 @@ $("btnSaveInvoice").onclick = async () => {
   });
   try{
     if (pendingFile){
-      await storeFile(id, pendingFile, pendingFile.name);
+      await storeFile(id, pendingFile, pendingFile.name, { defer: true });
       // קובץ חדש — החותמת הקודמת כבר לא תקפה
       if (inv.stamped){ removeFile(id + "_s"); delete inv.stamped; }
       Object.assign(inv, { hasFile: true, fileName: pendingFile.name, fileType: pendingFile.type });
@@ -1921,14 +2021,103 @@ $("btnSaveInvoice").onclick = async () => {
   const isNew = !editingInvoiceId;
   const newFile = !!pendingFile;
   upsert("invoices", inv); closeSheet("overlayInvoice");
-  toast(isNew ? "החשבונית נשמרה ✓ — מטביע חותמת..." : "החשבונית עודכנה ✓");
-  if (newFile) autoStampInvoice(id);
+  if (newFile) saveInvoiceFileFlow(id);
+  else { toast(isNew ? "החשבונית נשמרה ✓" : "החשבונית עודכנה ✓"); flushFiles(); }
 };
 $("btnDeleteInvoice").onclick = () => {
   if (!editingInvoiceId) return;
   closeSheet("overlayInvoice");
   deleteInvoice(editingInvoiceId);
 };
+/* =====================================================================
+   אנימציית העלאה: מנוף מעביר את הקובץ מהמכשיר לענן, עם אחוזים וסטטוס.
+   האחוזים אמיתיים בזמן ההעלאה (XHR), ובשלבים שבהם השרת עובד (קריאת AI, שמירה)
+   הם מתקדמים לאט עד הסוף — כדי שתמיד יהיה ברור שמשהו קורה.
+   ===================================================================== */
+const lift = {
+  target: 0, shown: 0, creepTo: 0, timer: null, hideTimer: null,
+  show(title, status){
+    clearTimeout(this.hideTimer);
+    const ov = $("liftOverlay");
+    ov.classList.remove("done", "fail");
+    $("liftTitle").textContent = title || "מעלה קובץ";
+    $("liftClose").style.display = "none";
+    this.target = this.shown = this.creepTo = 0;
+    this.render(); this.status(status || "מתחיל…");
+    ov.classList.add("show"); ov.setAttribute("aria-hidden", "false");
+    clearInterval(this.timer);
+    this.timer = setInterval(() => this.tick(), 60);
+  },
+  status(t){ if (t != null) $("liftStatus").textContent = t; },
+  set(p, status){ this.target = Math.max(this.target, Math.min(1, p)); this.status(status); },
+  // התקדמות איטית עד `to` (כשאין מדד אמיתי — למשל בזמן שה-AI קורא)
+  creep(to, status){ this.creepTo = Math.max(this.creepTo, to); this.status(status); },
+  tick(){
+    if (this.creepTo > this.target) this.target += (this.creepTo - this.target) * 0.02;
+    this.shown += (this.target - this.shown) * 0.18;
+    if (Math.abs(this.target - this.shown) < 0.002) this.shown = this.target;
+    this.render();
+  },
+  render(){
+    const pct = Math.round(this.shown * 100);
+    $("liftPct").textContent = pct;
+    $("liftBar").style.width = pct + "%";
+  },
+  done(status, delay = 900){
+    return new Promise(res => {
+      this.target = this.shown = 1; this.creepTo = 0; this.render();
+      this.status(status || "הסתיים ✓");
+      $("liftOverlay").classList.add("done");
+      this.hideTimer = setTimeout(() => { this.hide(); res(); }, delay);
+    });
+  },
+  fail(message){
+    clearInterval(this.timer);
+    $("liftOverlay").classList.add("fail");
+    this.status(message || "הפעולה נכשלה");
+    $("liftClose").style.display = "";
+  },
+  hide(){
+    clearInterval(this.timer);
+    const ov = $("liftOverlay");
+    ov.classList.remove("show"); ov.setAttribute("aria-hidden", "true");
+  },
+};
+$("liftClose").onclick = () => lift.hide();
+function fmtSize(bytes){
+  return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`;
+}
+
+/* קריאה לפונקציה בענן עם מדד התקדמות אמיתי של ההעלאה וההורדה (כמו ב-TripCost).
+   זה אותו פרוטוקול של httpsCallable: POST {data} ← {result} / {error}. */
+async function callWithProgress(name, data, { onUp, onDown, timeout = 300000 } = {}){
+  if (!cloudUser) throw Object.assign(new Error("לא מחובר"), { code: "functions/unauthenticated" });
+  const token = await cloudUser.getIdToken();
+  const projectId = (loadFirebaseConfig() || {}).projectId;
+  const url = `https://europe-west1-${projectId}.cloudfunctions.net/${name}`;
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.setRequestHeader("Authorization", "Bearer " + token);
+    xhr.timeout = timeout;
+    if (onUp) xhr.upload.onprogress = e => { if (e.lengthComputable) onUp(e.loaded / e.total); };
+    if (onUp) xhr.upload.onload = () => onUp(1);
+    if (onDown) xhr.onprogress = e => { if (e.lengthComputable) onDown(e.loaded / e.total); };
+    xhr.onload = () => {
+      let body = null;
+      try{ body = JSON.parse(xhr.responseText); }catch(e){}
+      if (xhr.status >= 200 && xhr.status < 300 && body && "result" in body){ resolve({ data: body.result }); return; }
+      const err = (body && body.error) || {};
+      const status = String(err.status || (xhr.status === 404 ? "NOT_FOUND" : "INTERNAL")).toLowerCase().replace(/_/g, "-");
+      reject(Object.assign(new Error(err.message || ""), { code: "functions/" + status, details: err.details }));
+    };
+    xhr.onerror = () => reject(Object.assign(new Error("אין חיבור לשרת"), { code: "functions/unavailable" }));
+    xhr.ontimeout = () => reject(Object.assign(new Error("הפעולה לקחה יותר מדי זמן"), { code: "functions/deadline-exceeded" }));
+    xhr.send(JSON.stringify({ data }));
+  });
+}
+
 /* =====================================================================
    קבצים בענן: כל קובץ נשמר גם במכשיר (מטמון) וגם ב-Firebase Storage דרך הפונקציות.
    אם אין רשת או שלא מחוברים — הקובץ נכנס לתור ועולה כשמתחברים. צפייה ממכשיר אחר מורידה מהענן.
@@ -1938,17 +2127,24 @@ const PENDING_UP = "tzahram_pending_uploads", PENDING_DEL = "tzahram_pending_del
 const readList = k => { try{ return JSON.parse(localStorage.getItem(k)) || []; }catch(e){ return []; } };
 const writeList = (k, l) => localStorage.setItem(k, JSON.stringify([...new Set(l)]));
 function cloudReady(){ return !!(fbFunctions && cloudUser); }
-async function storeFile(key, blob, name){
+async function storeFile(key, blob, name, { defer = false } = {}){
   await filePut(key, { blob, name, type: blob.type });
   writeList(PENDING_UP, [...readList(PENDING_UP), key]);
   writeList(PENDING_DEL, readList(PENDING_DEL).filter(k => k !== key));
-  flushFiles();
+  if (!defer) flushFiles();
 }
-async function loadFile(key){
+// loadFile: קודם מהמכשיר; אחרת מהענן — עם אנימציית המנוף כשמבקשים (progress)
+async function loadFile(key, { progress = false } = {}){
   const local = await fileGet(key).catch(() => null);
   if (local) return local;
   if (!cloudReady()) return null;
-  const { data } = await fbFunctions.httpsCallable("getFile", { timeout: 120000 })({ key });
+  if (progress) lift.show("מוריד מהענן", "מבקש את הקובץ…");
+  let data;
+  try{
+    if (progress) lift.creep(0.3);
+    ({ data } = await callWithProgress("getFile", { key }, { onDown: f => progress && lift.set(0.3 + f * 0.65, "מוריד…"), timeout: 120000 }));
+  }catch(e){ if (progress) lift.fail("ההורדה נכשלה: " + (e.message || "")); throw e; }
+  if (progress) lift.done("הקובץ הגיע ✓", 450);
   const bytes = Uint8Array.from(atob(data.data), c => c.charCodeAt(0));
   const rec = { blob: new Blob([bytes], { type: data.mimeType }), name: data.name, type: data.mimeType };
   filePut(key, rec).catch(() => {});
@@ -1960,32 +2156,46 @@ async function removeFile(key){
   writeList(PENDING_DEL, [...readList(PENDING_DEL), key]);
   flushFiles();
 }
-let flushing = false;
-async function flushFiles(){
-  if (flushing || !cloudReady() || !navigator.onLine) return;
-  flushing = true;
-  try{
-    for (const key of readList(PENDING_UP)){
-      const rec = await fileGet(key).catch(() => null);
-      if (rec){
-        await fbFunctions.httpsCallable("uploadFile", { timeout: 180000 })({ key, data: await blobToBase64(rec.blob), mimeType: rec.type || rec.blob.type, name: rec.name || "" });
+let flushPromise = null;
+// מעלה את כל הקבצים שבתור. onProgress(fraction, index, count, bytes) — להצגה באנימציה. מחזיר true אם הכל עלה.
+function flushFiles(onProgress){
+  if (!cloudReady() || !navigator.onLine) return Promise.resolve(false);
+  if (flushPromise) return flushPromise.then(() => flushFiles(onProgress));
+  flushPromise = (async () => {
+    try{
+      const keys = readList(PENDING_UP);
+      const recs = [];
+      for (const key of keys) recs.push([key, await fileGet(key).catch(() => null)]);
+      const total = recs.reduce((s, [, r]) => s + (r?.blob.size || 0), 0) || 1;
+      let sent = 0;
+      for (let i = 0; i < recs.length; i++){
+        const [key, rec] = recs[i];
+        if (rec){
+          const size = rec.blob.size;
+          await callWithProgress("uploadFile", { key, data: await blobToBase64(rec.blob), mimeType: rec.type || rec.blob.type, name: rec.name || "" },
+            { onUp: f => onProgress?.((sent + f * size) / total, i, recs.length, total), timeout: 180000 });
+          sent += size;
+        }
+        writeList(PENDING_UP, readList(PENDING_UP).filter(k => k !== key));
       }
-      writeList(PENDING_UP, readList(PENDING_UP).filter(k => k !== key));
-    }
-    for (const key of readList(PENDING_DEL)){
-      await fbFunctions.httpsCallable("deleteFile")({ key });
-      writeList(PENDING_DEL, readList(PENDING_DEL).filter(k => k !== key));
-    }
-  }catch(e){
-    console.warn("file sync paused", e);
-    // שירות הקבצים עוד לא הופעל / אין רשת — ננסה שוב בהתחברות הבאה
-  }finally{ flushing = false; }
+      for (const key of readList(PENDING_DEL)){
+        await callWithProgress("deleteFile", { key }, { timeout: 60000 });
+        writeList(PENDING_DEL, readList(PENDING_DEL).filter(k => k !== key));
+      }
+      return true;
+    }catch(e){
+      // שירות הקבצים לא זמין / אין רשת — הקבצים נשארים בתור וננסה שוב בהתחברות הבאה
+      console.warn("file sync paused", e);
+      return false;
+    }finally{ flushPromise = null; }
+  })();
+  return flushPromise;
 }
 window.addEventListener("online", () => flushFiles());
 
 async function viewInvoice(id, stamped){
   try{
-    const rec = await loadFile(stamped ? id + "_s" : id);
+    const rec = await loadFile(stamped ? id + "_s" : id, { progress: true });
     if (!rec){ toast(cloudReady() ? "הקובץ לא נמצא" : "צריך להתחבר כדי לפתוח קובץ שנשמר בענן"); return; }
     const url = URL.createObjectURL(rec.blob);
     window.open(url, "_blank", "noopener");
@@ -2056,7 +2266,7 @@ function stampPos(){
 async function openStampSheet(id){
   const inv = state.invoices.find(x => x.id === id); if (!inv) return;
   let rec;
-  try{ rec = await loadFile(id); }catch(e){ toast("טעינת הקובץ נכשלה: " + (e.message || "")); return; }
+  try{ rec = await loadFile(id, { progress: true }); }catch(e){ return; }
   if (!rec){ toast(cloudReady() ? "הקובץ לא נמצא" : "צריך להתחבר כדי לטעון את הקובץ מהענן"); return; }
   const isPdf = (rec.type || rec.blob.type) === "application/pdf";
   stampCtx = { inv, rec, kind: isPdf ? "pdf" : "image", pageIndex: 0, pages: 1 };
@@ -2227,8 +2437,8 @@ function findBlankSpot(cv, ratio){
   return { x: 0.05, y: 0.62, w: 0.42 };
 }
 // חותמת אוטומטית מיד אחרי העלאת חשבונית: מיקום אוטומטי, תאריך היום, שמירה בענן ופתיחת השליחה
-async function autoStampInvoice(id, { share = true } = {}){
-  const inv = state.invoices.find(x => x.id === id); if (!inv?.hasFile) return;
+async function autoStampInvoice(id, { share = true, defer = false, quiet = false } = {}){
+  const inv = state.invoices.find(x => x.id === id); if (!inv?.hasFile) return false;
   try{
     const rec = await loadFile(id); if (!rec) return;
     const kind = (rec.type || rec.blob.type) === "application/pdf" ? "pdf" : "image";
@@ -2238,15 +2448,33 @@ async function autoStampInvoice(id, { share = true } = {}){
     const ratio = stampCv.height / stampCv.width;
     const pos = findBlankSpot(await pageRaster(rec, kind, pdf, 0), ratio);
     const blob = await buildStampedPdf({ rec, kind, pageIndex: 0, pos: { x: pos.x, y: pos.y, w: pos.w }, ratio }, todayISO());
-    await storeFile(id + "_s", blob, stampedName(inv));
-    const cur = state.invoices.find(x => x.id === id); if (!cur) return;
+    await storeFile(id + "_s", blob, stampedName(inv), { defer });
+    const cur = state.invoices.find(x => x.id === id); if (!cur) return false;
     upsert("invoices", Object.assign({}, cur, { stamped: { date: todayISO(), name: stampedName(inv), pos, pageIndex: 0 } }));
-    toast("החשבונית נחתמה ✓ — אפשר לשלוח");
+    if (!quiet) toast("החשבונית נחתמה ✓ — אפשר לשלוח");
     if (share) openInvoiceShare(id);
+    return true;
   }catch(e){
     console.error(e);
-    toast("החתימה האוטומטית נכשלה — אפשר לחתום ידנית בכפתור 🖋️");
+    if (!quiet) toast("החתימה האוטומטית נכשלה — אפשר לחתום ידנית בכפתור 🖋️");
+    return false;
   }
+}
+// שמירת חשבונית עם קובץ חדש: שמירה, חותמת, העלאה לענן — הכל באנימציית המנוף, ואז שליחה
+async function saveInvoiceFileFlow(id){
+  lift.show("שמירת חשבונית", "מטביע חתימה וחותמת…");
+  lift.set(0.06); lift.creep(0.3);
+  const stamped = await autoStampInvoice(id, { share: false, defer: true, quiet: true });
+  lift.set(0.32, stamped ? "החותמת הוטבעה ✓" : "החתימה האוטומטית נכשלה — ממשיך לשמירה");
+  if (cloudReady() && navigator.onLine){
+    lift.creep(0.9, "מעלה לענן…");
+    const ok = await flushFiles((f, i, n, total) => lift.set(0.32 + f * 0.66, `מעלה לענן… ${n > 1 ? `קובץ ${i + 1} מתוך ${n} · ` : ""}${fmtSize(total * f)} / ${fmtSize(total)}`));
+    await lift.done(ok ? (stamped ? "נשמר בענן ונחתם ✓" : "נשמר בענן ✓") : "נשמר במכשיר — יעלה לענן בהמשך");
+  } else {
+    await lift.done("נשמר במכשיר — יעלה לענן כשתתחבר", 1300);
+  }
+  if (!stamped) toast("אפשר לחתום ידנית בכפתור 🖋️");
+  openInvoiceShare(id);
 }
 
 // חשבונית בלי קובץ (הוזנה ידנית): מסמנים שנבדקה והוזרמה — ואז היא יורדת מהתקציב בפועל
@@ -2262,15 +2490,22 @@ $("btnSaveStamp").onclick = async () => {
   if (!getDate("sDate")){ $("sDate").closest(".field").classList.add("invalid"); toast("תאריך לא תקין — DD/MM/YYYY"); return; }
   const btn = $("btnSaveStamp"); btn.classList.add("busy");
   try{
+    lift.show("שמירת החותמת", "מטביע חתימה וחותמת…");
+    lift.creep(0.3);
     const blob = await buildStampedPdf();
     const inv = stampCtx.inv;
-    await storeFile(inv.id + "_s", blob, stampedName(inv));
+    await storeFile(inv.id + "_s", blob, stampedName(inv), { defer: true });
     localStorage.setItem(STAMP_POS_KEY, JSON.stringify(stampCtx.pos));
     upsert("invoices", Object.assign({}, state.invoices.find(x => x.id === inv.id) || inv, { stamped: { date: getDate("sDate"), name: stampedName(inv), pos: stampCtx.pos, pageIndex: stampCtx.pageIndex } }));
     closeSheet("overlayStamp");
-    toast("החשבונית נחתמה ✓");
+    lift.set(0.32, "החותמת הוטבעה ✓");
+    if (cloudReady() && navigator.onLine){
+      lift.creep(0.9, "מעלה לענן…");
+      const ok = await flushFiles((f, i, n, total) => lift.set(0.32 + f * 0.66, `מעלה לענן… ${fmtSize(total * f)} / ${fmtSize(total)}`));
+      await lift.done(ok ? "נשמר בענן ✓" : "נשמר במכשיר — יעלה לענן בהמשך");
+    } else await lift.done("נשמר במכשיר — יעלה לענן כשתתחבר", 1300);
     openInvoiceShare(inv.id);
-  }catch(e){ console.error(e); toast("החתימה נכשלה: " + (e.message || "")); }
+  }catch(e){ console.error(e); lift.fail("החתימה נכשלה: " + (e.message || "")); }
   finally{ btn.classList.remove("busy"); }
 };
 function invoiceMessage(inv){
@@ -2279,7 +2514,7 @@ function invoiceMessage(inv){
 async function openInvoiceShare(id){
   const inv = state.invoices.find(x => x.id === id); if (!inv) return;
   const key = inv.stamped ? id + "_s" : id;
-  const blobP = loadFile(key).then(r => { if (!r) throw new Error("הקובץ לא נמצא"); return r.blob; });
+  const blobP = loadFile(key, { progress: true }).then(r => { if (!r) throw new Error("הקובץ לא נמצא"); return r.blob; });
   const name = inv.stamped ? (inv.stamped.name || stampedName(inv)) : (inv.fileName || "חשבונית.pdf");
   openFileShareSheet({
     title: inv.stamped ? "שליחת החשבונית החתומה" : "שליחת החשבונית",
