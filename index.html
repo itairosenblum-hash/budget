@@ -235,7 +235,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 10:20</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 10:15</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -1111,6 +1111,10 @@ function renderSyncPanel(){
     $("btnSignIn").onclick = signIn;
   }
   $("cfgInput").value = localStorage.getItem(FB_CONFIG_KEY) ? JSON.stringify(cfg, null, 2) : "";
+  // ההגדרה כבר מובנית בקוד — מסתירים את האפשרות להדביק הגדרה אחרת, כדי שלא יבלבל.
+  const builtIn = !!DEFAULT_FIREBASE_CONFIG && !localStorage.getItem(FB_CONFIG_KEY);
+  $("cfgDetails").style.display = builtIn ? "none" : "";
+  $("cfgDetails").nextElementSibling.style.display = builtIn ? "none" : "";
 }
 $("btnSaveCfg").onclick = () => {
   const cfg = parseFirebaseConfigInput($("cfgInput").value);
