@@ -277,7 +277,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 12:05</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 12:20</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -425,12 +425,12 @@
 <div class="overlay" id="overlayStamp">
   <div class="sheet" style="max-width:600px;">
     <div class="sheet-handle"></div>
-    <h2>הטבעת חותמת</h2>
+    <h2>מיקום החותמת</h2>
     <div class="grid2">
       <div class="field"><label for="sDate">תאריך החתימה</label><input id="sDate" class="ltr date-il" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off"></div>
       <div class="field" id="stampPageRow"><label for="sPage">עמוד</label><select id="sPage"></select></div>
     </div>
-    <div class="hint" style="margin:-4px 0 10px;">גוררים את החותמת למקום פנוי בחשבונית. המיקום נשמר לפעם הבאה.</div>
+    <div class="hint" style="margin:-4px 0 10px;">החותמת מוטבעת אוטומטית כשמעלים חשבונית. כאן אפשר לגרור אותה למקום אחר או לשנות את התאריך.</div>
     <div id="stampStage" class="stamp-stage"></div>
     <div class="field" style="margin-top:12px;"><label for="sSize">גודל החותמת</label><input id="sSize" type="range" min="15" max="90" value="50" style="width:100%;"></div>
     <div class="sheet-actions">
@@ -1600,7 +1600,7 @@ function renderInvoices(){
       </div>
       <div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
       <div class="item-actions">
-        ${i.hasFile ? `<button class="mini-btn pri" data-stamp-invoice="${i.id}">🖋️ ${i.stamped ? "חותמת מחדש" : "חותמת"}</button>` : ""}
+        ${i.hasFile ? `<button class="mini-btn pri" data-stamp-invoice="${i.id}">🖋️ ${i.stamped ? "הזזת החותמת" : "חותמת"}</button>` : ""}
         ${i.stamped ? `<button class="mini-btn" data-view-stamped="${i.id}">👁️ החתומה</button>` : i.hasFile ? `<button class="mini-btn" data-view-invoice="${i.id}">👁️ צפייה</button>` : ""}
         ${i.hasFile ? `<button class="mini-btn wa" data-share-invoice="${i.id}">📤 שליחה</button>` : ""}
         <button class="mini-btn" data-edit-invoice="${i.id}">✏️ עריכה</button>
@@ -1803,8 +1803,10 @@ $("btnSaveInvoice").onclick = async () => {
     }
   }catch(e){ console.error(e); toast("שמירת הקובץ נכשלה: " + (e.message || "")); }
   const isNew = !editingInvoiceId;
+  const newFile = !!pendingFile;
   upsert("invoices", inv); closeSheet("overlayInvoice");
-  toast(isNew ? "החשבונית נשמרה ✓" : "החשבונית עודכנה ✓");
+  toast(isNew ? "החשבונית נשמרה ✓ — מטביע חותמת..." : "החשבונית עודכנה ✓");
+  if (newFile) autoStampInvoice(id);
 };
 $("btnDeleteInvoice").onclick = () => {
   if (!editingInvoiceId) return;
@@ -1905,27 +1907,24 @@ function stampImage(){
 }
 // מרכיבים את החותמת כתמונה אחת (PNG שקוף)
 async function composeStamp(dateISO){
-  await Promise.all([document.fonts.load("700 60px Heebo"), document.fonts.load("400 52px Heebo")]).catch(() => {});
+  await Promise.all([document.fonts.load("700 60px Heebo"), document.fonts.load("500 54px Heebo")]).catch(() => {});
   const img = await stampImage();
-  const W = 1180, H = 360;
+  const W = 1180, H = 300;
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
   const ctx = cv.getContext("2d");
-  // מסגרת הטקסט מימין
-  const bx = 560, by = 22, bw = W - bx - 16, bh = H - 44;
+  // מסגרת מימין: "חשבונית נבדקה והוזרמה" / "בתאריך: DD/MM/YYYY"
+  const bx = 560, by = 40, bw = W - bx - 16, bh = H - 80;
   ctx.strokeStyle = "#111"; ctx.lineWidth = 6; ctx.strokeRect(bx, by, bw, bh);
   ctx.direction = "rtl"; ctx.textAlign = "right"; ctx.fillStyle = "#111";
   const rx = bx + bw - 26;
-  ctx.font = "700 58px Heebo"; ctx.fillText("חשבונית נבדקה והוזרמה", rx, by + 86);
+  ctx.font = "700 58px Heebo"; ctx.fillText("חשבונית נבדקה והוזרמה", rx, by + 88);
   const w1 = ctx.measureText("חשבונית נבדקה והוזרמה").width;
-  ctx.fillRect(rx - w1, by + 98, w1, 4);
-  ctx.font = "700 52px Heebo"; ctx.fillText("בתאריך:", rx, by + 178);
+  ctx.fillRect(rx - w1, by + 100, w1, 4);
+  ctx.font = "700 54px Heebo"; ctx.fillText("בתאריך:", rx, by + 184);
   const wd = ctx.measureText("בתאריך: ").width;
-  ctx.fillStyle = "#1d3a8a"; ctx.font = "500 54px Heebo"; ctx.fillText(fmtDateIL(dateISO), rx - wd, by + 178);
-  ctx.fillStyle = "#111"; ctx.font = "700 52px Heebo"; ctx.fillText("חתימה:", rx, by + 262);
-  const ws = ctx.measureText("חתימה: ").width;
-  ctx.fillRect(bx + 28, by + 270, (rx - ws) - (bx + 28), 3);
-  // החותמת והחתימה משמאל
-  const maxW = bx - 24, maxH = H - 20;
+  ctx.fillStyle = "#1d3a8a"; ctx.font = "500 56px Heebo"; ctx.fillText(fmtDateIL(dateISO), rx - wd, by + 184);
+  // החתימה (החותמת האישית) משמאל
+  const maxW = bx - 24, maxH = H - 16;
   const sc = Math.min(maxW / img.width, maxH / img.height);
   const iw = img.width * sc, ih = img.height * sc;
   ctx.drawImage(img, 8, (H - ih) / 2, iw, ih);
@@ -1934,8 +1933,9 @@ async function composeStamp(dateISO){
 
 let stampCtx = null;   // { inv, rec, kind, pdf, pageIndex, pages, imgEl }
 function stampPos(){
+  if (stampCtx?.inv?.stamped?.pos) return stampCtx.inv.stamped.pos;
   try{ const p = JSON.parse(localStorage.getItem(STAMP_POS_KEY)); if (p && p.w) return p; }catch(e){}
-  return { x: 0.05, y: 0.62, w: 0.5 };
+  return { x: 0.05, y: 0.62, w: 0.42 };
 }
 async function openStampSheet(id){
   const inv = state.invoices.find(x => x.id === id); if (!inv) return;
@@ -2034,10 +2034,10 @@ function stampRect(page, pos, ratio){
   if (rot === 270) return { x: cx + cw - top - sh, y: cy + ch - left, width: sw, height: sh, rotate: degrees(270) };
   return { x: cx + left, y: cy + ch - top - sh, width: sw, height: sh };
 }
-async function buildStampedPdf(){
+async function buildStampedPdf(c = stampCtx, dateISO = getDate("sDate") || todayISO()){
   const { PDFDocument } = await loadPdfLib();
-  const { rec, kind, pageIndex, pos, ratio } = stampCtx;
-  const stampPng = await new Promise(res => composeStamp(getDate("sDate") || todayISO()).then(cv => cv.toBlob(res, "image/png")));
+  const { rec, kind, pageIndex, pos, ratio } = c;
+  const stampPng = await new Promise(res => composeStamp(dateISO).then(cv => cv.toBlob(res, "image/png")));
   let doc, page;
   if (kind === "pdf"){
     doc = await PDFDocument.load(await rec.blob.arrayBuffer(), { ignoreEncryption: true });
@@ -2060,6 +2060,79 @@ async function buildStampedPdf(){
   page.drawImage(st, stampRect(page, pos, ratio));
   return new Blob([await doc.save()], { type: "application/pdf" });
 }
+/* מיקום אוטומטי: מחפשים בעמוד את האזור הריק ביותר בגודל החותמת (מעדיפים את החצי התחתון).
+   עובד על תמונה מוקטנת של העמוד כפי שהוא מוצג (כולל סיבוב), באותן יחידות של stampRect. */
+async function pageRaster(rec, kind, pdf, pageIndex, width = 320){
+  const cv = document.createElement("canvas");
+  if (kind === "pdf"){
+    const pg = await pdf.getPage(pageIndex + 1);
+    const vp1 = pg.getViewport({ scale: 1 });
+    const vp = pg.getViewport({ scale: width / vp1.width });
+    cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+    await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+  } else {
+    const bmp = await createImageBitmap(rec.blob);
+    cv.width = width; cv.height = Math.round(bmp.height * width / bmp.width);
+    cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+  }
+  return cv;
+}
+function findBlankSpot(cv, ratio){
+  const W = cv.width, H = cv.height;
+  const px = cv.getContext("2d").getImageData(0, 0, W, H).data;
+  // טבלת סכומים של "דיו" (פיקסל כהה) לחישוב מהיר של כל מלבן
+  const I = new Float64Array((W + 1) * (H + 1));
+  for (let y = 0; y < H; y++){
+    let row = 0;
+    for (let x = 0; x < W; x++){
+      const k = (y * W + x) * 4;
+      const lum = 0.299 * px[k] + 0.587 * px[k + 1] + 0.114 * px[k + 2];
+      row += lum < 160 ? 1 : 0;
+      I[(y + 1) * (W + 1) + x + 1] = I[y * (W + 1) + x + 1] + row;
+    }
+  }
+  const ink = (x0, y0, x1, y1) => I[y1 * (W + 1) + x1] - I[y0 * (W + 1) + x1] - I[y1 * (W + 1) + x0] + I[y0 * (W + 1) + x0];
+  for (const w of [0.46, 0.38, 0.32]){
+    const sw = Math.round(w * W), sh = Math.round(sw * ratio);
+    if (sh >= H) continue;
+    let best = null;
+    for (let fy = 0.3; fy * H + sh <= H * 0.98; fy += 0.01){
+      for (let fx = 0.03; fx * W + sw <= W * 0.97; fx += 0.01){
+        const x0 = Math.round(fx * W), y0 = Math.round(fy * H);
+        // שוליים קטנים סביב החותמת כדי לא להיצמד לטקסט
+        const m = 4, a = ink(Math.max(0, x0 - m), Math.max(0, y0 - m), Math.min(W, x0 + sw + m), Math.min(H, y0 + sh + m));
+        const score = a / ((sw + 2 * m) * (sh + 2 * m)) + 0.02 * (1 - fy);
+        if (!best || score < best.score) best = { score, x: fx, y: fy, w };
+      }
+    }
+    if (best && best.score < 0.03) return best;
+    if (w === 0.32 && best) return best;
+  }
+  return { x: 0.05, y: 0.62, w: 0.42 };
+}
+// חותמת אוטומטית מיד אחרי העלאת חשבונית: מיקום אוטומטי, תאריך היום, שמירה בענן ופתיחת השליחה
+async function autoStampInvoice(id, { share = true } = {}){
+  const inv = state.invoices.find(x => x.id === id); if (!inv?.hasFile) return;
+  try{
+    const rec = await loadFile(id); if (!rec) return;
+    const kind = (rec.type || rec.blob.type) === "application/pdf" ? "pdf" : "image";
+    let pdf = null;
+    if (kind === "pdf"){ const pdfjs = await loadPdfjs(); pdf = await pdfjs.getDocument({ data: new Uint8Array(await rec.blob.arrayBuffer()) }).promise; }
+    const stampCv = await composeStamp(todayISO());
+    const ratio = stampCv.height / stampCv.width;
+    const pos = findBlankSpot(await pageRaster(rec, kind, pdf, 0), ratio);
+    const blob = await buildStampedPdf({ rec, kind, pageIndex: 0, pos: { x: pos.x, y: pos.y, w: pos.w }, ratio }, todayISO());
+    await storeFile(id + "_s", blob, stampedName(inv));
+    const cur = state.invoices.find(x => x.id === id); if (!cur) return;
+    upsert("invoices", Object.assign({}, cur, { stamped: { date: todayISO(), name: stampedName(inv), pos, pageIndex: 0 } }));
+    toast("החשבונית נחתמה ✓ — אפשר לשלוח");
+    if (share) openInvoiceShare(id);
+  }catch(e){
+    console.error(e);
+    toast("החתימה האוטומטית נכשלה — אפשר לחתום ידנית בכפתור 🖋️");
+  }
+}
+
 function stampedName(inv){ return `חשבונית ${inv.number || ""} חתומה.pdf`.replace(/\s+/g, " ").replace(" .pdf", ".pdf"); }
 $("btnSaveStamp").onclick = async () => {
   if (!stampCtx?.pos){ toast("החשבונית עוד לא נטענה"); return; }
@@ -2070,7 +2143,7 @@ $("btnSaveStamp").onclick = async () => {
     const inv = stampCtx.inv;
     await storeFile(inv.id + "_s", blob, stampedName(inv));
     localStorage.setItem(STAMP_POS_KEY, JSON.stringify(stampCtx.pos));
-    upsert("invoices", Object.assign({}, state.invoices.find(x => x.id === inv.id) || inv, { stamped: { date: getDate("sDate"), name: stampedName(inv) } }));
+    upsert("invoices", Object.assign({}, state.invoices.find(x => x.id === inv.id) || inv, { stamped: { date: getDate("sDate"), name: stampedName(inv), pos: stampCtx.pos, pageIndex: stampCtx.pageIndex } }));
     closeSheet("overlayStamp");
     toast("החשבונית נחתמה ✓");
     openInvoiceShare(inv.id);
