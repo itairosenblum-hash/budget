@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-app-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-auth-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-firestore-compat.js"></script>
@@ -208,8 +209,35 @@
   .field.uncertain::after{content:"לא זוהה בוודאות — כדאי לבדוק מול החשבונית";display:block;font-size:12px;color:var(--amber-ink);margin-top:4px;}
   .file-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border:1px dashed var(--border);border-radius:var(--radius-sm);background:var(--card);margin-bottom:14px;}
   .file-row .fname{flex:1;min-width:120px;font-size:14px;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sec-head{background:var(--pri);color:#fff;border-radius:16px 16px 0 0;padding:12px 14px;display:flex;align-items:center;gap:10px;}
+  .sec-idx{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;flex:none;}
+  .sec-title{font-weight:800;font-size:16.5px;min-width:0;overflow-wrap:anywhere;}
+  .sec-sub{font-size:12.5px;opacity:.85;}
+  .sec-card{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;min-width:0;}
+  .sec-body{padding:12px 14px;display:flex;flex-direction:column;gap:10px;}
+  .meta-chips{display:flex;gap:6px;flex-wrap:wrap;}
+  .meta-chip{font-size:12.5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:3px 8px;color:var(--ink-soft);}
+  .meta-chip b{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums;}
+  .meta-chip.warn{background:var(--amber-tint);color:var(--amber-ink);border-color:transparent;}
+  .meta-chip.bad{background:var(--danger-tint);color:var(--danger);border-color:transparent;}
+  .back-btn{display:inline-flex;align-items:center;gap:6px;border:none;background:none;color:var(--pri-dark);font-weight:800;font-size:15px;cursor:pointer;padding:6px 0;margin-top:4px;}
+  .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:14px;background:var(--card);box-shadow:var(--shadow);-webkit-overflow-scrolling:touch;}
+  table.ledger{border-collapse:collapse;width:100%;min-width:860px;font-size:13.5px;}
+  table.ledger th{background:var(--amber-tint);color:var(--ink);font-weight:800;text-align:right;padding:8px 9px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;}
+  table.ledger td{padding:8px 9px;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  table.ledger td.desc{white-space:normal;min-width:180px;}
+  table.ledger tr.row{cursor:pointer;}
+  table.ledger tr.row:hover td{background:var(--pri-tint);}
+  table.ledger tr.start td{color:var(--ink-soft);font-weight:700;}
+  table.ledger .ltr{direction:ltr;text-align:right;}
+  table.ledger .muted{color:var(--ink-soft);}
+  .pill-open{font-size:11.5px;font-weight:800;background:var(--card-2);color:var(--ink-soft);border-radius:99px;padding:1px 7px;}
   #versionFooter{text-align:center;font-size:12px;color:var(--ink-soft);padding:24px 10px 10px;}
 
+  @media (min-width: 1000px){
+    #app{max-width:1180px;}
+    .cards{grid-template-columns:1fr 1fr 1fr;}
+  }
   @media (min-width: 900px){
     .overlay{align-items:center;padding:24px;}
     .sheet{border-radius:22px;max-width:480px;max-height:86vh;}
@@ -240,7 +268,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 10:50</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 11:30</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -248,17 +276,28 @@
   </button></div>
 </div>
 
-<!-- Budget line sheet -->
+<!-- Budget section sheet (הזמנת מסגרת מול חברה) -->
 <div class="overlay" id="overlayBudget">
   <div class="sheet">
     <div class="sheet-handle"></div>
     <h2 id="budgetFormTitle">סעיף תקציב חדש</h2>
     <div class="grid2">
-      <div class="field"><label for="bCode">מספר סעיף</label><input id="bCode" class="ltr" inputmode="numeric" placeholder="לדוגמה 4302-01"></div>
-      <div class="field"><label for="bYear">שנת תקציב</label><input id="bYear" type="number" inputmode="numeric"></div>
+      <div class="field"><label for="bIndex">מס' סעיף</label><input id="bIndex" class="ltr" inputmode="numeric"></div>
+      <div class="field"><label for="bCompany">חברה</label><select id="bCompany"></select></div>
     </div>
-    <div class="field"><label for="bName">שם הסעיף</label><input id="bName" placeholder="לדוגמה: חלפים למלגזות"></div>
-    <div class="field"><label for="bAmount">תקציב מאושר (₪)</label><input id="bAmount" type="number" inputmode="decimal" step="0.01" min="0"></div>
+    <div class="grid2">
+      <div class="field"><label for="bOrderNo">מספר הזמנה</label><input id="bOrderNo" class="ltr" inputmode="numeric" placeholder="4441511529"></div>
+      <div class="field"><label for="bReq">מס' דרישה</label><input id="bReq" class="ltr" inputmode="numeric"></div>
+    </div>
+    <div class="field"><label for="bAmount">סכום ההזמנה (₪)</label><input id="bAmount" type="number" inputmode="decimal" step="0.01" min="0"></div>
+    <div class="grid2">
+      <div class="field"><label for="bOpen">ת.פ (תאריך פתיחה)</label><input id="bOpen" type="date"></div>
+      <div class="field"><label for="bValid">תוקף ההזמנה</label><input id="bValid" type="date"></div>
+    </div>
+    <div class="field"><label for="bVat">מחיר שורה נלקח מהחשבונית</label>
+      <select id="bVat"><option value="total">כולל מע"מ (סה"כ לתשלום)</option><option value="before">לפני מע"מ</option></select>
+    </div>
+    <div class="field"><label for="bTitle">תיאור (לא חובה)</label><input id="bTitle" placeholder="לדוגמה: אחזקת מלגזות ומעמ"סים"></div>
     <div class="field"><label for="bNotes">הערות</label><textarea id="bNotes"></textarea></div>
     <div class="sheet-actions">
       <button class="btn-primary" id="btnSaveBudget">שמירה</button>
@@ -297,29 +336,30 @@
   <div class="sheet">
     <div class="sheet-handle"></div>
     <h2 id="orderFormTitle">הזמנת עבודה חדשה</h2>
-    <div class="field-group-title">פרטי ההזמנה</div>
+    <div class="field"><label for="oBudget">סעיף תקציב (הזמנת מסגרת)</label><select id="oBudget"></select></div>
     <div class="field"><label for="oCompany">אל (שם החברה)</label><select id="oCompany"></select></div>
     <div class="grid2">
-      <div class="field"><label for="oDate">תאריך הנפקה</label><input id="oDate" type="date"></div>
       <div class="field"><label for="oNumber">מס' הזמנה</label><input id="oNumber" class="ltr" inputmode="numeric"></div>
+      <div class="field"><label for="oSerial">מס' סודר</label><input id="oSerial" class="ltr" inputmode="numeric"></div>
     </div>
     <div class="grid2">
-      <div class="field"><label for="oSerial">מס' סודר</label><input id="oSerial" class="ltr" inputmode="numeric"></div>
-      <div class="field"><label for="oTzadi">מס' צ'</label><input id="oTzadi" class="ltr" inputmode="numeric" list="dlTzadi"></div>
+      <div class="field"><label for="oDate">תחילה (תאריך הנפקה)</label><input id="oDate" type="date"></div>
+      <div class="field"><label for="oEnd">סיום</label><input id="oEnd" type="date"></div>
     </div>
     <div class="field-group-title">הכלי</div>
-    <div class="grid3">
-      <div class="field"><label for="oVehicle">סוג הכלי</label><input id="oVehicle" list="dlVehicle"></div>
-      <div class="field"><label for="oHours">שעות מנוע</label><input id="oHours" class="ltr" inputmode="numeric"></div>
-      <div class="field"><label for="oUnit">יחידה</label><input id="oUnit" list="dlUnit"></div>
-    </div>
-    <div class="field"><label for="oRepairs">אבקש לבצע את התיקונים הבאים</label><textarea id="oRepairs" rows="3"></textarea></div>
-    <div class="field"><label for="oDetails">התיקון יבוצע</label><textarea id="oDetails" rows="3"></textarea></div>
-    <div class="field-group-title">תקציב (לא מודפס בטופס)</div>
     <div class="grid2">
-      <div class="field"><label for="oBudget">סעיף תקציב</label><select id="oBudget"></select></div>
-      <div class="field"><label for="oAmount">סכום (₪)</label><input id="oAmount" type="number" inputmode="decimal" step="0.01" min="0"></div>
+      <div class="field"><label for="oTzadi">מס' צ'</label><input id="oTzadi" class="ltr" inputmode="numeric" list="dlTzadi"></div>
+      <div class="field"><label for="oVehicle">סוג הכלי</label><input id="oVehicle" list="dlVehicle"></div>
     </div>
+    <div class="grid2">
+      <div class="field"><label for="oUnit">יחידה</label><input id="oUnit" list="dlUnit"></div>
+      <div class="field"><label for="oHours">שעות מנוע</label><input id="oHours" class="ltr" inputmode="numeric"></div>
+    </div>
+    <div class="field"><label for="oRepairs">אבקש לבצע את התיקונים הבאים (תאור התיקון)</label><textarea id="oRepairs" rows="3"></textarea></div>
+    <div class="field"><label for="oDetails">התיקון יבוצע</label><textarea id="oDetails" rows="3"></textarea></div>
+    <div class="field-group-title">מחיר (לא מודפס בטופס)</div>
+    <div class="field"><label for="oPrice">מחיר (₪)</label><input id="oPrice" type="number" inputmode="decimal" step="0.01" min="0">
+      <div class="hint" id="oPriceHint" style="margin:6px 0 0;">מתמלא אוטומטית מהחשבונית כשמקשרים חשבונית להזמנה. עד אז היתרה בסעיף לא יורדת.</div></div>
     <div class="sheet-actions">
       <button class="btn-primary" id="btnSaveOrder">שמירה</button>
       <button class="btn-ghost btn-danger-outline" id="btnDeleteOrder">מחיקה</button>
@@ -438,6 +478,7 @@ const TABS = [
 let state = loadState();
 let activeTab = localStorage.getItem("tzahram_tab") || "budget";
 let search = "";
+let openLineId = null;   // סעיף שפתוח בתצוגת הטבלה
 
 /* ---------- helpers ---------- */
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
@@ -445,7 +486,8 @@ function now(){ return Date.now(); }
 function escapeHtml(s){ return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
 function fmtMoney(n){
   const v = Number(n) || 0;
-  return "₪" + v.toLocaleString("he-IL", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const frac = Math.round(v * 100) % 100 !== 0 ? 2 : 0;
+  return "₪" + v.toLocaleString("he-IL", { minimumFractionDigits: frac, maximumFractionDigits: 2 });
 }
 function $(id){ return document.getElementById(id); }
 function toast(msg){
@@ -475,10 +517,21 @@ function initials(name){
 
 /* ---------- state ---------- */
 function defaultState(){ return { budgetLines: [], companies: [], orders: [], invoices: [], tomb: {} }; }
+/* סעיף תקציב = הזמנת מסגרת מול חברה (כמו בגיליון): מס' סעיף, חברה, מספר הזמנה, סכום, ת.פ, מס' דרישה, תוקף.
+   כל הזמנת עבודה (1007) היא שורה בסעיף. נתונים ישנים מומרים כאן למבנה החדש. */
+function migrateState(s){
+  for (const b of s.budgetLines || []){
+    if (b.orderNumber == null && b.code) b.orderNumber = b.code;
+    if (b.title == null && b.name) b.title = b.name;
+    if (!b.vatMode) b.vatMode = "total";
+  }
+  for (const o of s.orders || []) if (o.price == null && o.amount) o.price = o.amount;
+  return s;
+}
 function loadState(){
   try{
     const s = JSON.parse(localStorage.getItem(STATE_KEY));
-    if (s && typeof s === "object") return Object.assign(defaultState(), s);
+    if (s && typeof s === "object") return migrateState(Object.assign(defaultState(), s));
   }catch(e){}
   return defaultState();
 }
@@ -548,12 +601,31 @@ function renderTabs(){
     </button>`).join("");
   $("searchInput").placeholder = activeTab === "companies" ? "🔍 חיפוש חברה, איש קשר או טלפון..."
     : activeTab === "orders" ? "🔍 חיפוש הזמנה לפי מספר, צ', חברה או כלי..."
-    : activeTab === "invoices" ? "🔍 חיפוש חשבונית לפי מספר, חברה או הזמנה..." : "🔍 חיפוש סעיף לפי שם או מספר...";
+    : activeTab === "invoices" ? "🔍 חיפוש חשבונית לפי מספר, חברה או הזמנה..."
+    : openLineId ? "🔍 חיפוש שורה לפי צ', כלי, יחידה או תיאור..." : "🔍 חיפוש סעיף לפי חברה או מספר הזמנה...";
 
 }
 
+function validityChip(l){
+  if (!l.validUntil) return "";
+  const days = Math.round((new Date(l.validUntil + "T00:00:00") - new Date(todayISO() + "T00:00:00")) / 864e5);
+  const cls = days < 0 ? "bad" : days <= 60 ? "warn" : "";
+  const txt = days < 0 ? "פג תוקף" : days <= 60 ? `בתוקף עוד ${days} ימים` : "בתוקף עד";
+  return `<span class="meta-chip ${cls}">${txt} <b>${escapeHtml(fmtDateIL(l.validUntil))}</b></span>`;
+}
+function lineChips(l){
+  return [
+    l.orderNumber && `<span class="meta-chip">הזמנה <b dir="ltr">${escapeHtml(l.orderNumber)}</b></span>`,
+    l.requisition && `<span class="meta-chip">דרישה <b dir="ltr">${escapeHtml(l.requisition)}</b></span>`,
+    l.openDate && `<span class="meta-chip">ת.פ <b>${escapeHtml(fmtDateIL(l.openDate))}</b></span>`,
+    validityChip(l),
+  ].filter(Boolean).join("");
+}
+
 function renderBudget(){
-  const lines = [...state.budgetLines].sort((a, b) => String(a.code).localeCompare(String(b.code), "he", { numeric: true }));
+  if (openLineId && budgetById(openLineId)) return renderLineDetail(budgetById(openLineId));
+  openLineId = null;
+  const lines = sortedLines();
   const total = lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
   const spent = lines.reduce((s, l) => s + spentForLine(l.id), 0);
   const left = total - spent;
@@ -562,7 +634,7 @@ function renderBudget(){
   let html = `
     <div class="pass">
       <div class="pass-top">
-        <div class="pass-eyebrow">סך התקציב המאושר</div>
+        <div class="pass-eyebrow">סך הזמנות המסגרת</div>
         <div class="pass-total tnum">${fmtMoney(total)} <small>· ${lines.length} סעיפים</small></div>
         <div class="bar ${pct >= 100 ? "over" : pct >= 85 ? "warn" : ""}" style="margin-top:12px;"><i style="width:${pct}%"></i></div>
       </div>
@@ -574,36 +646,126 @@ function renderBudget(){
       </div>
     </div>`;
 
-  const shown = lines.filter(l => matches(l, ["code", "name", "notes"]));
+  const shown = lines.filter(l => !search || [l.index, l.orderNumber, l.requisition, l.title, l.notes, companyById(l.companyId)?.name]
+    .join(" ").toLowerCase().includes(search.toLowerCase()));
   html += `<div class="section-title"><span>סעיפי תקציב</span></div>`;
   if (!lines.length){
-    html += `<div class="empty"><div class="big">📊</div><p><b>עוד אין סעיפי תקציב</b></p><p>לוחצים על + כדי להוסיף את הסעיף הראשון</p></div>`;
-  } else if (!shown.length){
-    html += `<div class="empty"><p>לא נמצאו סעיפים שמתאימים לחיפוש</p></div>`;
-  } else {
-    html += `<div class="cards">` + shown.map(l => {
-      const amt = Number(l.amount) || 0, used = spentForLine(l.id), rem = amt - used;
-      const p = amt ? used / amt * 100 : 0;
-      return `
-      <div class="item-card">
-        <div class="item-top">
-          <div style="min-width:0;">
-            ${l.code ? `<span class="code-badge">${escapeHtml(l.code)}</span>` : ""}
-            <div class="item-title" style="margin-top:6px;">${escapeHtml(l.name || "ללא שם")}</div>
-            ${l.year ? `<div class="item-sub">שנת תקציב ${escapeHtml(l.year)}</div>` : ""}
-          </div>
-          <div class="item-amt"><div class="big">${fmtMoney(rem)}</div><div class="small">יתרה מתוך ${fmtMoney(amt)}</div></div>
+    return html + `<div class="empty"><div class="big">📊</div><p><b>עוד אין סעיפי תקציב</b></p><p>לוחצים על + כדי להוסיף הזמנת מסגרת (חברה, מספר הזמנה, סכום)</p></div>`;
+  }
+  if (!shown.length) return html + `<div class="empty"><p>לא נמצאו סעיפים שמתאימים לחיפוש</p></div>`;
+  return html + `<div class="cards">` + shown.map(l => {
+    const c = companyById(l.companyId);
+    const amt = Number(l.amount) || 0, u = lineUsage(l.id), rem = amt - u.total;
+    const p = amt ? u.total / amt * 100 : 0;
+    return `
+    <div class="sec-card">
+      <div class="sec-head">
+        <div class="sec-idx">${escapeHtml(l.index || "—")}</div>
+        <div style="min-width:0;flex:1;">
+          <div class="sec-title">${escapeHtml(c?.name || "חברה לא נבחרה")}</div>
+          ${l.title ? `<div class="sec-sub">${escapeHtml(l.title)}</div>` : ""}
         </div>
+        <div style="text-align:left;flex:none;"><div style="font-weight:900;font-size:17px;" class="tnum">${fmtMoney(rem)}</div><div class="sec-sub">יתרה מתוך ${fmtMoney(amt)}</div></div>
+      </div>
+      <div class="sec-body">
+        <div class="meta-chips">${lineChips(l)}</div>
         <div class="bar ${p >= 100 ? "over" : p >= 85 ? "warn" : ""}"><i style="width:${Math.min(100, p)}%"></i></div>
-        <div class="item-meta"><span>נוצל ${fmtMoney(used)}${(() => { const u = lineUsage(l.id); return u.open && u.inv ? ` <span style="opacity:.8">(חשבוניות ${fmtMoney(u.inv)} · הזמנות פתוחות ${fmtMoney(u.open)})</span>` : u.open ? ` <span style="opacity:.8">(הזמנות פתוחות)</span>` : ""; })()}</span><span>${Math.round(p)}%</span></div>
+        <div class="item-meta"><span>נוצל ${fmtMoney(u.total)} · ${u.rows} שורות${u.open ? ` · ${u.open} פתוחות` : ""}</span><span>${Math.round(p)}%</span></div>
+        <div class="item-actions">
+          <button class="mini-btn pri" data-open-line="${l.id}">📋 פתיחת הסעיף</button>
+          <button class="mini-btn" data-new-row="${l.id}">➕ שורה</button>
+          <button class="mini-btn" data-edit-budget="${l.id}">✏️ עריכה</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("") + `</div>`;
+}
+
+/* טבלת הסעיף — אותן עמודות כמו בגיליון: סודר, מספר צ', סוג הכלי, יחידה, תחילה, סיום, שע"מ, מחיר, יתרה, חשבונית, תאור התיקון */
+function lineRows(l){
+  const rows = state.orders.filter(o => o.budgetLineId === l.id)
+    .sort((a, b) => (parseInt(a.serial) || 1e9) - (parseInt(b.serial) || 1e9) || String(a.date).localeCompare(String(b.date)));
+  let bal = Number(l.amount) || 0;
+  return rows.map(o => {
+    const price = orderPrice(o); bal -= price;
+    return { o, price, balance: Math.round(bal * 100) / 100, inv: invoiceForOrder(o.id) };
+  });
+}
+function renderLineDetail(l){
+  const c = companyById(l.companyId);
+  const amt = Number(l.amount) || 0, u = lineUsage(l.id), rem = amt - u.total;
+  const all = lineRows(l);
+  const q = search.toLowerCase();
+  const rows = !q ? all : all.filter(r => [r.o.serial, r.o.tzadi, r.o.vehicle, r.o.unit, r.o.repairs, r.inv?.number].join(" ").toLowerCase().includes(q));
+  const head = ["סודר", "מספר צ'", "סוג הכלי", "יחידה", "תחילה", "סיום", 'שע"מ', "מחיר", "יתרה", "חשבונית", "תאור התיקון"];
+  return `
+    <button class="back-btn" id="btnBackLines">→ כל הסעיפים</button>
+    <div class="sec-card" style="margin-top:6px;">
+      <div class="sec-head">
+        <div class="sec-idx">${escapeHtml(l.index || "—")}</div>
+        <div style="min-width:0;flex:1;">
+          <div class="sec-title">${escapeHtml(c?.name || "חברה לא נבחרה")}</div>
+          <div class="sec-sub">סכום ההזמנה ${fmtMoney(amt)}${l.title ? ` · ${escapeHtml(l.title)}` : ""}</div>
+        </div>
+        <div style="text-align:left;flex:none;"><div style="font-weight:900;font-size:19px;" class="tnum">${fmtMoney(rem)}</div><div class="sec-sub">יתרה</div></div>
+      </div>
+      <div class="sec-body">
+        <div class="meta-chips">${lineChips(l)}<span class="meta-chip">מחיר שורה <b>${l.vatMode === "before" ? "לפני מע\"מ" : "כולל מע\"מ"}</b></span></div>
         ${l.notes ? `<div class="item-note">${escapeHtml(l.notes)}</div>` : ""}
         <div class="item-actions">
-          <button class="mini-btn pri" data-edit-budget="${l.id}">✏️ עריכה</button>
+          <button class="mini-btn pri" data-new-row="${l.id}">➕ שורה חדשה (1007)</button>
+          <button class="mini-btn" data-export-line="${l.id}">📊 ייצוא לאקסל</button>
+          <button class="mini-btn" data-edit-budget="${l.id}">✏️ עריכת הסעיף</button>
         </div>
-      </div>`;
-    }).join("") + `</div>`;
-  }
-  return html;
+      </div>
+    </div>
+    <div class="section-title"><span>שורות</span><span>${all.length}${u.open ? ` · ${u.open} פתוחות` : ""}</span></div>
+    ${!all.length ? `<div class="empty"><div class="big">📋</div><p><b>אין עדיין שורות בסעיף</b></p><p>כל הזמנת עבודה (1007) שתפתח בסעיף תופיע כאן כשורה</p></div>` : `
+    <div class="table-wrap"><table class="ledger">
+      <thead><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>
+        <tr class="start"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>${fmtMoney(amt)}</td><td></td><td></td></tr>
+        ${rows.map(r => `<tr class="row" data-row-order="${r.o.id}">
+          <td>${escapeHtml(r.o.serial || "")}</td>
+          <td class="ltr">${escapeHtml(r.o.tzadi || "")}</td>
+          <td>${escapeHtml(r.o.vehicle || "")}</td>
+          <td>${escapeHtml(r.o.unit || "")}</td>
+          <td>${escapeHtml(fmtDateIL(r.o.date))}</td>
+          <td>${escapeHtml(fmtDateIL(r.o.endDate))}</td>
+          <td>${escapeHtml(r.o.hours || "")}</td>
+          <td>${r.price ? fmtMoney(r.price) : `<span class="pill-open">פתוחה</span>`}</td>
+          <td class="${r.balance < 0 ? "" : "muted"}" style="${r.balance < 0 ? "color:var(--danger);font-weight:800" : ""}">${fmtMoney(r.balance)}</td>
+          <td class="ltr">${r.inv ? escapeHtml(r.inv.number || "✓") : ""}</td>
+          <td class="desc">${escapeHtml(String(r.o.repairs || "").split("\n")[0])}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table></div>
+    ${rows.length < all.length ? `<p class="hint" style="margin-top:8px;">מוצגות ${rows.length} מתוך ${all.length} שורות לפי החיפוש</p>` : ""}`}`;
+}
+
+function exportLine(id){
+  const l = budgetById(id); if (!l) return;
+  if (typeof XLSX === "undefined"){ toast("ספריית האקסל לא נטענה (אין אינטרנט?)"); return; }
+  const c = companyById(l.companyId);
+  const title = [c?.name, l.orderNumber ? `הזמנה מספר ${l.orderNumber}` : "", l.amount ? `בסך ${l.amount} ש"ח` : "",
+    l.openDate ? `ת.פ ${fmtDateIL(l.openDate)}` : "", l.requisition ? `מס' דרישה ${l.requisition}` : "",
+    l.validUntil ? `(תוקף ההזמנה ${fmtDateIL(l.validUntil)})` : ""].filter(Boolean).join("  ");
+  const aoa = [
+    [l.index || "", title],
+    ["סודר", "מספר צ", "סוג הכלי", "יחידה", "תחילה", "סיום", 'שע"מ', "מחיר", "יתרה", "חשבונית", "תאור התיקון"],
+    ["", "", "", "", "", "", "", "", Number(l.amount) || 0, "", ""],
+    ...lineRows(l).map(r => [
+      parseInt(r.o.serial) || r.o.serial || "", r.o.tzadi || "", r.o.vehicle || "", r.o.unit || "",
+      fmtDateIL(r.o.date), fmtDateIL(r.o.endDate), r.o.hours ? (parseInt(r.o.hours) || r.o.hours) : "",
+      r.price || "", r.balance, r.inv?.number || "", r.o.repairs || ""]),
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [6, 11, 16, 10, 10, 10, 8, 11, 12, 15, 40].map(w => ({ wch: w }));
+  ws["!merges"] = [{ s: { r: 0, c: 1 }, e: { r: 0, c: 10 } }];
+  const wb = XLSX.utils.book_new();
+  wb.Workbook = { Views: [{ RTL: true }] };
+  XLSX.utils.book_append_sheet(wb, ws, `סעיף ${l.index || ""}`.trim().slice(0, 31));
+  XLSX.writeFile(wb, `סעיף ${l.index || ""} ${c?.name || ""}.xlsx`.replace(/\s+/g, " ").trim());
 }
 
 function renderCompanies(){
@@ -661,35 +823,60 @@ let editingBudgetId = null;
 function openBudgetForm(id){
   const l = state.budgetLines.find(x => x.id === id);
   editingBudgetId = l ? l.id : null;
-  $("budgetFormTitle").textContent = l ? "עריכת סעיף" : "סעיף תקציב חדש";
-  $("bCode").value = l?.code || "";
-  $("bYear").value = l?.year || new Date().getFullYear();
-  $("bName").value = l?.name || "";
+  $("budgetFormTitle").textContent = l ? `עריכת סעיף ${l.index || ""}` : "סעיף תקציב חדש";
+  const companies = [...state.companies].sort((a, b) => String(a.name).localeCompare(String(b.name), "he"));
+  $("bCompany").innerHTML = `<option value="">— בחירת חברה —</option>` + companies.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+  const nextIdx = String(Math.max(0, ...state.budgetLines.map(b => parseInt(b.index) || 0)) + 1);
+  $("bIndex").value = l ? (l.index || "") : nextIdx;
+  $("bCompany").value = l?.companyId || "";
+  $("bOrderNo").value = l?.orderNumber || "";
+  $("bReq").value = l?.requisition || "";
   $("bAmount").value = l ? (l.amount ?? "") : "";
+  $("bOpen").value = l?.openDate || "";
+  $("bValid").value = l?.validUntil || "";
+  $("bVat").value = l?.vatMode || "total";
+  $("bTitle").value = l?.title || "";
   $("bNotes").value = l?.notes || "";
   $("btnDeleteBudget").style.display = l ? "" : "none";
   document.querySelectorAll("#overlayBudget .field").forEach(f => f.classList.remove("invalid"));
   openSheet("overlayBudget");
-  if (!l) setTimeout(() => $("bCode").focus(), 250);
 }
 $("btnSaveBudget").onclick = () => {
-  const name = $("bName").value.trim();
-  if (!name){ $("bName").parentElement.classList.add("invalid"); toast("צריך שם לסעיף"); return; }
+  const companyId = $("bCompany").value;
+  if (!companyId && !$("bTitle").value.trim()){ $("bCompany").closest(".field").classList.add("invalid"); toast("צריך לבחור חברה"); return; }
   const old = state.budgetLines.find(x => x.id === editingBudgetId) || {};
-  upsert("budgetLines", Object.assign({}, old, {
-    id: editingBudgetId || uid(),
-    code: $("bCode").value.trim(),
-    year: $("bYear").value.trim(),
-    name,
+  const id = editingBudgetId || uid();
+  const line = Object.assign({}, old, {
+    id,
+    index: $("bIndex").value.trim(),
+    companyId,
+    orderNumber: $("bOrderNo").value.trim(),
+    requisition: $("bReq").value.trim(),
     amount: parseFloat($("bAmount").value) || 0,
+    openDate: $("bOpen").value,
+    validUntil: $("bValid").value,
+    vatMode: $("bVat").value,
+    title: $("bTitle").value.trim(),
     notes: $("bNotes").value.trim(),
-  }));
+  });
+  // שינוי מספר ההזמנה או החברה בסעיף מתעדכן גם בשורות שלו
+  if (editingBudgetId && (old.orderNumber !== line.orderNumber || old.companyId !== line.companyId)){
+    for (const o of state.orders) if (o.budgetLineId === id){
+      if (old.orderNumber !== line.orderNumber && (o.number || "") === (old.orderNumber || "")) o.number = line.orderNumber;
+      if (old.companyId !== line.companyId && o.companyId === old.companyId) o.companyId = line.companyId;
+      o._u = now();
+    }
+  }
+  upsert("budgetLines", line);
   closeSheet("overlayBudget");
   toast(editingBudgetId ? "הסעיף עודכן ✓" : "הסעיף נוסף ✓");
 };
 $("btnDeleteBudget").onclick = () => {
   if (!editingBudgetId) return;
+  const n = state.orders.filter(o => o.budgetLineId === editingBudgetId).length;
+  if (n && !confirm(`לסעיף יש ${n} שורות. השורות יישארו בלשונית ההזמנות בלי סעיף. למחוק את הסעיף?`)) return;
   closeSheet("overlayBudget");
+  if (openLineId === editingBudgetId) openLineId = null;
   removeItem("budgetLines", editingBudgetId);
 };
 
@@ -747,11 +934,19 @@ function todayISO(){
 }
 function companyById(id){ return state.companies.find(c => c.id === id); }
 function budgetById(id){ return state.budgetLines.find(b => b.id === id); }
-function nextNumber(key){
-  const nums = state.orders.map(o => parseInt(String(o[key] || "").replace(/\D/g, ""), 10)).filter(n => !isNaN(n));
-  return nums.length ? String(Math.max(...nums) + 1) : "";
+function nextSerial(lineId){
+  const nums = state.orders.filter(o => (o.budgetLineId || "") === (lineId || ""))
+    .map(o => parseInt(String(o.serial || "").replace(/\D/g, ""), 10)).filter(n => !isNaN(n));
+  return String(nums.length ? Math.max(...nums) + 1 : 1);
 }
-function budgetLabel(b){ return b ? `${b.code ? b.code + " · " : ""}${b.name}` : ""; }
+function sortedLines(){
+  return [...state.budgetLines].sort((a, b) => (parseInt(a.index) || 1e9) - (parseInt(b.index) || 1e9) || String(a.orderNumber).localeCompare(String(b.orderNumber)));
+}
+function budgetLabel(b){
+  if (!b) return "";
+  const c = companyById(b.companyId);
+  return [b.index ? `#${b.index}` : "", c?.name || b.title || "", b.orderNumber ? `הזמנה ${b.orderNumber}` : ""].filter(Boolean).join(" · ");
+}
 
 function renderOrders(){
   const list = [...state.orders].sort((a, b) =>
@@ -783,11 +978,11 @@ function renderOrders(){
     <div class="item-card">
       <div class="item-top">
         <div style="min-width:0;">
-          <span class="order-no">הזמנה ${escapeHtml(o.number || "—")}${o.serial ? ` · סודר ${escapeHtml(o.serial)}` : ""}</span>
+          <span class="order-no">הזמנה ${escapeHtml(o.number || "—")}${o.serial ? ` · סודר ${escapeHtml(o.serial)}` : ""}</span>${o.endDate ? ` <span class="pill-open" style="background:var(--pri-tint);color:var(--pri-dark);">הסתיים ${escapeHtml(fmtDateIL(o.endDate))}</span>` : ""}
           <div class="item-title" style="margin-top:6px;">${escapeHtml(c?.name || "חברה לא נבחרה")}</div>
           <div class="item-sub">${escapeHtml(fmtDateIL(o.date))}</div>
         </div>
-        <div class="item-amt"><div class="big">${o.amount ? fmtMoney(o.amount) : "—"}</div><div class="small">סכום</div></div>
+        <div class="item-amt"><div class="big">${orderPrice(o) ? fmtMoney(orderPrice(o)) : "—"}</div><div class="small">${orderPrice(o) ? (invoiceForOrder(o.id) ? "לפי חשבונית" : "מחיר") : "פתוחה"}</div></div>
       </div>
       <div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
       <div class="item-actions">
@@ -809,16 +1004,24 @@ function fillDatalists(){
 function openOrderForm(id, preset){
   const o = state.orders.find(x => x.id === id);
   editingOrderId = o ? o.id : null;
-  $("orderFormTitle").textContent = o ? `עריכת הזמנה ${o.number || ""}` : "הזמנת עבודה חדשה";
+  $("orderFormTitle").textContent = o ? `עריכת שורה ${o.serial || ""}${o.number ? ` · הזמנה ${o.number}` : ""}` : "הזמנת עבודה חדשה (1007)";
   const companies = [...state.companies].sort((a, b) => String(a.name).localeCompare(String(b.name), "he"));
   $("oCompany").innerHTML = `<option value="">— בחירת חברה —</option>` + companies.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
-  const lines = [...state.budgetLines].sort((a, b) => String(a.code).localeCompare(String(b.code), "he", { numeric: true }));
-  $("oBudget").innerHTML = `<option value="">— ללא —</option>` + lines.map(b => `<option value="${b.id}">${escapeHtml(budgetLabel(b))}</option>`).join("");
+  $("oBudget").innerHTML = `<option value="">— ללא סעיף —</option>` + sortedLines().map(b => `<option value="${b.id}">${escapeHtml(budgetLabel(b))}</option>`).join("");
   fillDatalists();
-  $("oCompany").value = o?.companyId || preset?.companyId || "";
+  // סעיף ברירת מחדל: מהקריאה (שורה חדשה בסעיף), או הסעיף היחיד של החברה שנבחרה
+  let lineId = o?.budgetLineId || preset?.budgetLineId || "";
+  if (!o && !lineId && preset?.companyId){
+    const own = state.budgetLines.filter(b => b.companyId === preset.companyId);
+    if (own.length === 1) lineId = own[0].id;
+  }
+  const line = budgetById(lineId);
+  $("oBudget").value = lineId;
+  $("oCompany").value = o?.companyId || line?.companyId || preset?.companyId || "";
   $("oDate").value = o?.date || todayISO();
-  $("oNumber").value = o ? (o.number || "") : nextNumber("number");
-  $("oSerial").value = o ? (o.serial || "") : nextNumber("serial");
+  $("oEnd").value = o?.endDate || "";
+  $("oNumber").value = o ? (o.number || "") : (line?.orderNumber || "");
+  $("oSerial").value = o ? (o.serial || "") : nextSerial(lineId);
   $("oTzadi").value = o?.tzadi || "";
   $("oVehicle").value = o?.vehicle || "";
   $("oHours").value = o?.hours || "";
@@ -826,12 +1029,23 @@ function openOrderForm(id, preset){
   $("oUnit").value = o?.unit || "";
   $("oRepairs").value = o?.repairs || "";
   $("oDetails").value = o?.details || "";
-  $("oBudget").value = o?.budgetLineId || "";
-  $("oAmount").value = o?.amount || "";
+  const inv = o && invoiceForOrder(o.id);
+  $("oPrice").value = inv ? orderPrice(o) : (o?.price ?? "");
+  $("oPrice").disabled = !!inv;
+  $("oPriceHint").textContent = inv
+    ? `לפי חשבונית ${inv.number || ""} (${line?.vatMode === "before" ? "לפני מע\"מ" : "כולל מע\"מ"}). לשינוי — עורכים את החשבונית.`
+    : "מתמלא אוטומטית מהחשבונית כשמקשרים חשבונית להזמנה. עד אז היתרה בסעיף לא יורדת.";
   $("btnDeleteOrder").style.display = o ? "" : "none";
   document.querySelectorAll("#overlayOrder .field").forEach(f => f.classList.remove("invalid"));
   openSheet("overlayOrder");
 }
+// בחירת סעיף ממלאת את החברה, את מספר ההזמנה ואת הסודר הבא בסעיף
+$("oBudget").addEventListener("change", () => {
+  const line = budgetById($("oBudget").value); if (!line) return;
+  if (line.companyId) $("oCompany").value = line.companyId;
+  if (line.orderNumber) $("oNumber").value = line.orderNumber;
+  if (!editingOrderId) $("oSerial").value = nextSerial(line.id);
+});
 // הקלדת צ' שכבר הופיע בהזמנה קודמת ממלאת את סוג הכלי והיחידה.
 $("oTzadi").addEventListener("change", () => {
   const t = $("oTzadi").value.trim(); if (!t) return;
@@ -842,7 +1056,9 @@ $("oTzadi").addEventListener("change", () => {
   if (!$("oUnit").value) $("oUnit").value = prev.unit || "";
   if (prev.hours) $("oHours").placeholder = `קודם: ${prev.hours}`;
 });
-function showOrdersTab(){
+function showOrdersTab(o){
+  // שורה שנוספה מתוך לשונית התקציב — נשארים בתקציב ופותחים את הסעיף שלה
+  if (activeTab === "budget" && o?.budgetLineId && budgetById(o.budgetLineId)){ openLineId = o.budgetLineId; return; }
   if (activeTab === "orders") return;
   activeTab = "orders"; localStorage.setItem("tzahram_tab", activeTab);
   search = ""; $("searchInput").value = "";
@@ -855,6 +1071,7 @@ function collectOrder(){
     id: editingOrderId || uid(),
     companyId,
     date: $("oDate").value || todayISO(),
+    endDate: $("oEnd").value,
     number: $("oNumber").value.trim(),
     serial: $("oSerial").value.trim(),
     tzadi: $("oTzadi").value.trim(),
@@ -864,18 +1081,18 @@ function collectOrder(){
     repairs: $("oRepairs").value.trim(),
     details: $("oDetails").value.trim(),
     budgetLineId: $("oBudget").value,
-    amount: parseFloat($("oAmount").value) || 0,
+    price: $("oPrice").value === "" ? null : (parseFloat($("oPrice").value) || 0),
   });
 }
 $("btnSaveOrder").onclick = () => {
   const o = collectOrder(); if (!o) return;
   const isNew = !editingOrderId;
-  showOrdersTab(); upsert("orders", o); closeSheet("overlayOrder");
+  showOrdersTab(o); upsert("orders", o); closeSheet("overlayOrder");
   toast(isNew ? "ההזמנה נשמרה ✓" : "ההזמנה עודכנה ✓");
 };
 $("btnSaveAndIssue").onclick = () => {
   const o = collectOrder(); if (!o) return;
-  showOrdersTab(); upsert("orders", o); closeSheet("overlayOrder");
+  showOrdersTab(o); upsert("orders", o); closeSheet("overlayOrder");
   issue1007(o.id);
 };
 $("btnDeleteOrder").onclick = () => {
@@ -1005,11 +1222,29 @@ const fileDel = id => fileOp("readwrite", s => s.delete(id));
 function orderById(id){ return state.orders.find(o => o.id === id); }
 function invoiceLineId(inv){ return inv.budgetLineId || orderById(inv.orderId)?.budgetLineId || ""; }
 function invoiceForOrder(orderId){ return state.invoices.find(i => i.orderId === orderId); }
+// סכום חשבונית כפי שנספר בסעיף: כולל מע"מ, או לפני מע"מ — לפי הגדרת הסעיף.
+function invoiceAmount(inv, line){
+  if (line?.vatMode === "before"){
+    if (inv.beforeVat) return Number(inv.beforeVat);
+    if (inv.vat) return Math.round((Number(inv.total) - Number(inv.vat)) * 100) / 100;
+    return Math.round(Number(inv.total) / 1.18 * 100) / 100;
+  }
+  return Number(inv.total) || 0;
+}
+// מחיר שורה: מהחשבונית המקושרת אם יש, אחרת המחיר שהוזן ידנית. בלי מחיר — השורה פתוחה ולא מורידה מהיתרה.
+function orderPrice(o){
+  const inv = invoiceForOrder(o.id);
+  if (inv) return invoiceAmount(inv, budgetById(o.budgetLineId));
+  return o.price != null && o.price !== "" ? Number(o.price) || 0 : 0;
+}
 function lineUsage(lineId){
-  const inv = state.invoices.filter(i => invoiceLineId(i) === lineId).reduce((s, i) => s + (Number(i.total) || 0), 0);
-  // הזמנה שכבר יש לה חשבונית נספרת לפי החשבונית, לא לפי הסכום שהוזן בהזמנה.
-  const open = state.orders.filter(o => o.budgetLineId === lineId && !invoiceForOrder(o.id)).reduce((s, o) => s + (Number(o.amount) || 0), 0);
-  return { inv, open, total: inv + open };
+  const line = budgetById(lineId);
+  const rows = state.orders.filter(o => o.budgetLineId === lineId);
+  const priced = rows.reduce((s, o) => s + orderPrice(o), 0);
+  // חשבונית ששויכה ישירות לסעיף בלי הזמנה
+  const loose = state.invoices.filter(i => !orderById(i.orderId) && i.budgetLineId === lineId).reduce((s, i) => s + invoiceAmount(i, line), 0);
+  const open = rows.filter(o => !orderPrice(o)).length;
+  return { total: priced + loose, rows: rows.length, open, loose };
 }
 
 function renderInvoices(){
@@ -1061,7 +1296,7 @@ let editingInvoiceId = null, pendingFile = null, pendingFileRemoved = false;
 function fillInvoiceSelects(){
   const companies = [...state.companies].sort((a, b) => String(a.name).localeCompare(String(b.name), "he"));
   $("iCompany").innerHTML = `<option value="">— בחירת חברה —</option>` + companies.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
-  const lines = [...state.budgetLines].sort((a, b) => String(a.code).localeCompare(String(b.code), "he", { numeric: true }));
+  const lines = sortedLines();
   $("iBudget").innerHTML = `<option value="">— לפי ההזמנה / ללא —</option>` + lines.map(b => `<option value="${b.id}">${escapeHtml(budgetLabel(b))}</option>`).join("");
 }
 function fillOrderSelect(keep){
@@ -1264,6 +1499,7 @@ async function viewInvoice(id){
 /* ---------- events ---------- */
 $("tabs").addEventListener("click", e => {
   const b = e.target.closest("[data-tab]"); if (!b) return;
+  if (b.dataset.tab === "budget" && activeTab === "budget") openLineId = null;
   activeTab = b.dataset.tab; localStorage.setItem("tzahram_tab", activeTab);
   search = ""; $("searchInput").value = "";
   render(); window.scrollTo({ top: 0 });
@@ -1275,13 +1511,18 @@ $("view").addEventListener("click", e => {
   const g = e.target.closest("[data-issue-order]"); if (g) return issue1007(g.dataset.issueOrder, g);
   const sd = e.target.closest("[data-send-order]"); if (sd) return openSendSheet(sd.dataset.sendOrder);
   if (e.target.closest("#btnScanInvoice")) return $("scanInput").click();
+  const ol = e.target.closest("[data-open-line]"); if (ol){ openLineId = ol.dataset.openLine; search = ""; $("searchInput").value = ""; render(); window.scrollTo({ top: 0 }); return; }
+  if (e.target.closest("#btnBackLines")){ openLineId = null; search = ""; $("searchInput").value = ""; render(); return; }
+  const xl = e.target.closest("[data-export-line]"); if (xl) return exportLine(xl.dataset.exportLine);
+  const nr = e.target.closest("[data-new-row]"); if (nr) return openOrderForm(null, { budgetLineId: nr.dataset.newRow });
+  const row = e.target.closest("[data-row-order]"); if (row) return openOrderForm(row.dataset.rowOrder);
   const ei = e.target.closest("[data-edit-invoice]"); if (ei) return openInvoiceForm(ei.dataset.editInvoice);
   const vi = e.target.closest("[data-view-invoice]"); if (vi) return viewInvoice(vi.dataset.viewInvoice);
   const nb = e.target.closest("[data-new-order-for]"); if (nb) return openOrderForm(null, { companyId: nb.dataset.newOrderFor });
 });
 $("searchInput").addEventListener("input", e => { search = e.target.value.trim(); render(); });
 $("btnAdd").onclick = () => activeTab === "companies" ? openCompanyForm(null) : activeTab === "orders" ? openOrderForm(null)
-  : activeTab === "invoices" ? openInvoiceForm(null) : openBudgetForm(null);
+  : activeTab === "invoices" ? openInvoiceForm(null) : openLineId ? openOrderForm(null, { budgetLineId: openLineId }) : openBudgetForm(null);
 $("btnSettings").onclick = () => { renderSyncPanel(); openSheet("overlaySettings"); };
 $("syncStatusLine").onclick = () => { renderSyncPanel(); openSheet("overlaySettings"); };
 window.addEventListener("scroll", () => $("topbar").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
@@ -1299,7 +1540,7 @@ $("importInput").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   try{
     const data = JSON.parse(await f.text());
-    state = mergeStates(state, Object.assign(defaultState(), data));
+    state = mergeStates(state, migrateState(Object.assign(defaultState(), data)));
     saveState(); render(); toast("הגיבוי מוזג ✓");
   }catch(err){ toast("הקובץ לא תקין"); }
   e.target.value = "";
@@ -1364,7 +1605,7 @@ function startListener(){
   unsub = docRef.onSnapshot(snap => {
     let remote = defaultState();
     if (snap.exists){
-      try{ remote = Object.assign(defaultState(), JSON.parse(snap.data().payload || "{}")); }catch(e){ console.warn("bad payload", e); }
+      try{ remote = migrateState(Object.assign(defaultState(), JSON.parse(snap.data().payload || "{}"))); }catch(e){ console.warn("bad payload", e); }
     }
     lastRemoteJson = syncedJson(remote);
     const merged = mergeStates(state, remote);
