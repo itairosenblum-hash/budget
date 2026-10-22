@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-app-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-auth-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-firestore-compat.js"></script>
@@ -190,6 +191,18 @@
   .undo-toast{pointer-events:auto;display:flex;align-items:center;gap:14px;padding:9px 10px 9px 18px;}
   .undo-toast button{background:var(--amber);color:#23281C;border:none;border-radius:99px;padding:5px 14px;font-weight:800;cursor:pointer;}
 
+  .order-no{font-size:12.5px;font-weight:800;background:var(--amber-tint);color:var(--amber-ink);border-radius:7px;padding:2px 8px;display:inline-block;font-variant-numeric:tabular-nums;}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13.5px;}
+  .kv .k{color:var(--ink-soft);font-size:12.5px;}
+  .kv .v{overflow-wrap:anywhere;}
+  .field-group-title{font-size:13px;font-weight:800;color:var(--pri-dark);margin:6px 2px 10px;letter-spacing:.2px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+  .send-btn{width:100%;display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--border);background:var(--card);border-radius:14px;margin-bottom:10px;cursor:pointer;font-size:15.5px;font-weight:700;color:var(--ink);text-align:right;text-decoration:none;}
+  .send-btn .ic{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;flex:none;background:var(--card-2);}
+  .send-btn small{display:block;font-weight:500;font-size:12.5px;color:var(--ink-soft);}
+  .send-btn[aria-disabled="true"]{opacity:.45;pointer-events:none;}
+  .send-btn.wa .ic{background:#DDF5E6;}
+  .busy{opacity:.6;pointer-events:none;}
   #versionFooter{text-align:center;font-size:12px;color:var(--ink-soft);padding:24px 10px 10px;}
 
   @media (min-width: 900px){
@@ -222,7 +235,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 09:50</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 10:20</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -274,6 +287,54 @@
   </div>
 </div>
 
+<!-- Work order (1007) sheet -->
+<div class="overlay" id="overlayOrder">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 id="orderFormTitle">הזמנת עבודה חדשה</h2>
+    <div class="field-group-title">פרטי ההזמנה</div>
+    <div class="field"><label for="oCompany">אל (שם החברה)</label><select id="oCompany"></select></div>
+    <div class="grid2">
+      <div class="field"><label for="oDate">תאריך הנפקה</label><input id="oDate" type="date"></div>
+      <div class="field"><label for="oNumber">מס' הזמנה</label><input id="oNumber" class="ltr" inputmode="numeric"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label for="oSerial">מס' סודר</label><input id="oSerial" class="ltr" inputmode="numeric"></div>
+      <div class="field"><label for="oTzadi">מס' צ'</label><input id="oTzadi" class="ltr" inputmode="numeric" list="dlTzadi"></div>
+    </div>
+    <div class="field-group-title">הכלי</div>
+    <div class="grid3">
+      <div class="field"><label for="oVehicle">סוג הכלי</label><input id="oVehicle" list="dlVehicle"></div>
+      <div class="field"><label for="oHours">שעות מנוע</label><input id="oHours" class="ltr" inputmode="numeric"></div>
+      <div class="field"><label for="oUnit">יחידה</label><input id="oUnit" list="dlUnit"></div>
+    </div>
+    <div class="field"><label for="oRepairs">אבקש לבצע את התיקונים הבאים</label><textarea id="oRepairs" rows="3"></textarea></div>
+    <div class="field"><label for="oDetails">התיקון יבוצע</label><textarea id="oDetails" rows="3"></textarea></div>
+    <div class="field-group-title">תקציב (לא מודפס בטופס)</div>
+    <div class="grid2">
+      <div class="field"><label for="oBudget">סעיף תקציב</label><select id="oBudget"></select></div>
+      <div class="field"><label for="oAmount">סכום (₪)</label><input id="oAmount" type="number" inputmode="decimal" step="0.01" min="0"></div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-primary" id="btnSaveOrder">שמירה</button>
+      <button class="btn-ghost btn-danger-outline" id="btnDeleteOrder">מחיקה</button>
+      <button class="btn-ghost" data-close>ביטול</button>
+    </div>
+    <button class="btn-ghost" style="width:100%;margin-top:10px;" id="btnSaveAndIssue">שמירה והפקת 1007</button>
+  </div>
+</div>
+<datalist id="dlTzadi"></datalist><datalist id="dlVehicle"></datalist><datalist id="dlUnit"></datalist>
+
+<!-- Send 1007 sheet -->
+<div class="overlay" id="overlaySend">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 id="sendTitle">שליחת 1007</h2>
+    <div id="sendBody"></div>
+    <button class="btn-ghost" style="width:100%;margin-top:6px;" data-close>סגירה</button>
+  </div>
+</div>
+
 <!-- Settings / sync sheet -->
 <div class="overlay" id="overlaySettings">
   <div class="sheet">
@@ -304,9 +365,9 @@
 <script>
 "use strict";
 /* =====================================================================
-   תקציב אחזקה צהר"מ — שלב 1: מעטפת, סעיפי תקציב, כרטיסיות חברות, סנכרון.
+   תקציב אחזקה צהר"מ — סעיפי תקציב, הזמנות עבודה (1007), כרטיסיות חברות, סנכרון.
    מבנה הנתונים (נשמר מקומית ב-localStorage ובענן במסמך אחד ב-Firestore):
-     state = { budgetLines:[…], companies:[…], invoices:[…], tomb:{id:ts} }
+     state = { budgetLines:[…], companies:[…], orders:[…], invoices:[…], tomb:{id:ts} }
    לכל פריט יש id ו-_u (זמן עדכון אחרון) — המיזוג בין מכשירים בוחר את הגרסה החדשה יותר,
    ו-tomb זוכר מחיקות כדי שפריט שנמחק לא יחזור ממכשיר אחר.
    ===================================================================== */
@@ -324,7 +385,8 @@ const DEFAULT_FIREBASE_CONFIG = {
 };
 
 const TABS = [
-  { id: "budget",    label: "סעיפי תקציב", icon: "📊" },
+  { id: "budget",    label: "תקציב", icon: "📊" },
+  { id: "orders",    label: "הזמנות 1007", icon: "📄" },
   { id: "companies", label: "חברות",       icon: "🏢" },
   { id: "invoices",  label: "חשבוניות",    icon: "🧾", soon: true },
 ];
@@ -368,7 +430,7 @@ function initials(name){
 }
 
 /* ---------- state ---------- */
-function defaultState(){ return { budgetLines: [], companies: [], invoices: [], tomb: {} }; }
+function defaultState(){ return { budgetLines: [], companies: [], orders: [], invoices: [], tomb: {} }; }
 function loadState(){
   try{
     const s = JSON.parse(localStorage.getItem(STATE_KEY));
@@ -407,7 +469,7 @@ function mergeStates(a, b){
   const tomb = Object.assign({}, a.tomb || {});
   for (const [k, v] of Object.entries(b.tomb || {})) tomb[k] = Math.max(tomb[k] || 0, v);
   const out = { tomb };
-  for (const key of ["budgetLines", "companies", "invoices"]){
+  for (const key of ["budgetLines", "companies", "orders", "invoices"]){
     const map = new Map();
     for (const it of [...(a[key] || []), ...(b[key] || [])]){
       const cur = map.get(it.id);
@@ -419,13 +481,13 @@ function mergeStates(a, b){
 }
 function syncedJson(s){
   const sortById = l => [...(l || [])].sort((x, y) => x.id < y.id ? -1 : 1);
-  return JSON.stringify({ b: sortById(s.budgetLines), c: sortById(s.companies), i: sortById(s.invoices), t: s.tomb || {} });
+  return JSON.stringify({ b: sortById(s.budgetLines), c: sortById(s.companies), o: sortById(s.orders), i: sortById(s.invoices), t: s.tomb || {} });
 }
 
 /* ---------- derived ---------- */
 function spentForLine(lineId){
-  // שלב החשבוניות יזין את זה; כרגע אין חשבוניות, אז 0.
-  return state.invoices.filter(inv => inv.budgetLineId === lineId).reduce((s, inv) => s + (Number(inv.amount) || 0), 0);
+  // כרגע: סכום הזמנות העבודה (1007) שמשויכות לסעיף. בשלב החשבוניות, חשבונית שמקושרת להזמנה תחליף את הסכום שלה.
+  return state.orders.filter(o => o.budgetLineId === lineId).reduce((s, o) => s + (Number(o.amount) || 0), 0);
 }
 function matches(obj, fields){
   if (!search) return true;
@@ -435,12 +497,13 @@ function matches(obj, fields){
 
 /* ---------- render ---------- */
 function renderTabs(){
-  const counts = { budget: state.budgetLines.length, companies: state.companies.length, invoices: state.invoices.length };
+  const counts = { budget: state.budgetLines.length, orders: state.orders.length, companies: state.companies.length, invoices: state.invoices.length };
   $("tabs").innerHTML = TABS.map(t => `
     <button class="tab-chip ${t.id === activeTab ? "active" : ""} ${t.soon ? "soon" : ""}" data-tab="${t.id}">
       <span>${t.icon}</span><span>${t.label}</span>${t.soon ? "" : `<span class="count tnum">${counts[t.id]}</span>`}
     </button>`).join("");
-  $("searchInput").placeholder = activeTab === "companies" ? "🔍 חיפוש חברה, איש קשר או טלפון..." : "🔍 חיפוש סעיף לפי שם או מספר...";
+  $("searchInput").placeholder = activeTab === "companies" ? "🔍 חיפוש חברה, איש קשר או טלפון..."
+    : activeTab === "orders" ? "🔍 חיפוש הזמנה לפי מספר, צ', חברה או כלי..." : "🔍 חיפוש סעיף לפי שם או מספר...";
   $("searchInput").style.display = activeTab === "invoices" ? "none" : "";
   document.querySelector(".fab").style.display = activeTab === "invoices" ? "none" : "";
 }
@@ -530,7 +593,8 @@ function renderCompanies(){
         <a class="mini-btn wa" ${wa ? `href="https://wa.me/${wa}" target="_blank" rel="noopener"` : `aria-disabled="true"`}>💬 וואטסאפ</a>
         <a class="mini-btn" ${c.email ? `href="mailto:${encodeURIComponent(c.email)}"` : `aria-disabled="true"`}>✉️ מייל</a>
         <a class="mini-btn" ${(c.phone || c.mobile) ? `href="tel:${escapeHtml(String(c.phone || c.mobile).replace(/[^\d+]/g, ""))}"` : `aria-disabled="true"`}>📞 חיוג</a>
-        <button class="mini-btn pri" data-edit-company="${c.id}">✏️ עריכה</button>
+        <button class="mini-btn pri" data-new-order-for="${c.id}">📄 הזמנה</button>
+        <button class="mini-btn" data-edit-company="${c.id}">✏️ עריכה</button>
       </div>
     </div>`;
   }).join("") + `</div>`;
@@ -540,13 +604,14 @@ function renderInvoices(){
   return `<div class="soon-card" style="margin-top:10px;">
     <div style="font-size:40px;">🧾</div>
     <p><b>חשבוניות — השלב הבא</b></p>
-    <p>סריקת חשבונית, שיוך לסעיף ולחברה, הפקת דוח 1007, חותמת ושליחה בוואטסאפ או במייל.</p>
+    <p>סריקת חשבונית, שיוך להזמנה, לסעיף ולחברה, הטבעת חותמת ושליחה בוואטסאפ או במייל.</p>
   </div>`;
 }
 
 function render(){
   renderTabs();
-  $("view").innerHTML = activeTab === "companies" ? renderCompanies() : activeTab === "invoices" ? renderInvoices() : renderBudget();
+  $("view").innerHTML = activeTab === "companies" ? renderCompanies() : activeTab === "orders" ? renderOrders()
+    : activeTab === "invoices" ? renderInvoices() : renderBudget();
 }
 
 /* ---------- sheets ---------- */
@@ -627,6 +692,253 @@ $("btnDeleteCompany").onclick = () => {
   removeItem("companies", editingCompanyId);
 };
 
+/* =====================================================================
+   הזמנות עבודה (במקום טופס 1007)
+   כל הזמנה נשמרת באתר, ו"הפקת 1007" ממלאת את הטופס המקורי (1007-template.docx)
+   בשדות שמסומנים בו בסוגריים מרובעים, ומורידה קובץ בשם 1007.docx.
+   ===================================================================== */
+const TEMPLATE_URL = "1007-template.docx";
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+function fmtDateIL(iso){
+  if (!iso) return "";
+  const [y, m, d] = String(iso).split("-");
+  return d && m && y ? `${d}/${m}/${y}` : String(iso);
+}
+function todayISO(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function companyById(id){ return state.companies.find(c => c.id === id); }
+function budgetById(id){ return state.budgetLines.find(b => b.id === id); }
+function nextNumber(key){
+  const nums = state.orders.map(o => parseInt(String(o[key] || "").replace(/\D/g, ""), 10)).filter(n => !isNaN(n));
+  return nums.length ? String(Math.max(...nums) + 1) : "";
+}
+function budgetLabel(b){ return b ? `${b.code ? b.code + " · " : ""}${b.name}` : ""; }
+
+function renderOrders(){
+  const list = [...state.orders].sort((a, b) =>
+    String(b.date || "").localeCompare(String(a.date || "")) || (parseInt(b.number) || 0) - (parseInt(a.number) || 0));
+  const shown = list.filter(o => {
+    if (!search) return true;
+    const c = companyById(o.companyId);
+    const hay = [o.number, o.serial, o.tzadi, o.vehicle, o.unit, o.repairs, c?.name].join(" ").toLowerCase();
+    return hay.includes(search.toLowerCase());
+  });
+  let html = `<div class="section-title" style="margin-top:6px;"><span>הזמנות עבודה</span><span>${list.length}</span></div>`;
+  if (!list.length){
+    return html + `<div class="empty"><div class="big">📄</div><p><b>עוד אין הזמנות עבודה</b></p>
+      <p>לוחצים על + כדי למלא הזמנה ולהפיק טופס 1007</p>
+      ${state.companies.length ? "" : `<p style="font-size:13.5px;">טיפ: כדאי קודם להוסיף את החברה בלשונית "חברות"</p>`}</div>`;
+  }
+  if (!shown.length) return html + `<div class="empty"><p>לא נמצאו הזמנות שמתאימות לחיפוש</p></div>`;
+  return html + `<div class="cards">` + shown.map(o => {
+    const c = companyById(o.companyId), b = budgetById(o.budgetLineId);
+    const kv = [
+      o.tzadi && ["צ'", `<span dir="ltr">${escapeHtml(o.tzadi)}</span>`],
+      (o.vehicle || o.hours) && ["כלי", escapeHtml([o.vehicle, o.hours ? `${o.hours} ש"מ` : ""].filter(Boolean).join(" · "))],
+      o.unit && ["יחידה", escapeHtml(o.unit)],
+      o.repairs && ["תיקונים", escapeHtml(o.repairs).replace(/\n/g, "<br>")],
+      ["סעיף", b ? escapeHtml(budgetLabel(b)) : `<span style="color:var(--ink-soft)">${o.budgetLineId ? "סעיף שנמחק" : "לא שויך"}</span>`],
+    ].filter(Boolean);
+    return `
+    <div class="item-card">
+      <div class="item-top">
+        <div style="min-width:0;">
+          <span class="order-no">הזמנה ${escapeHtml(o.number || "—")}${o.serial ? ` · סודר ${escapeHtml(o.serial)}` : ""}</span>
+          <div class="item-title" style="margin-top:6px;">${escapeHtml(c?.name || "חברה לא נבחרה")}</div>
+          <div class="item-sub">${escapeHtml(fmtDateIL(o.date))}</div>
+        </div>
+        <div class="item-amt"><div class="big">${o.amount ? fmtMoney(o.amount) : "—"}</div><div class="small">סכום</div></div>
+      </div>
+      <div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
+      <div class="item-actions">
+        <button class="mini-btn pri" data-issue-order="${o.id}">📄 הפקת 1007</button>
+        <button class="mini-btn wa" data-send-order="${o.id}">📤 שליחה</button>
+        <button class="mini-btn" data-edit-order="${o.id}">✏️ עריכה</button>
+      </div>
+    </div>`;
+  }).join("") + `</div>`;
+}
+
+let editingOrderId = null;
+function fillDatalists(){
+  const uniq = key => [...new Set(state.orders.map(o => String(o[key] || "").trim()).filter(Boolean))];
+  $("dlTzadi").innerHTML = uniq("tzadi").map(v => `<option value="${escapeHtml(v)}">`).join("");
+  $("dlVehicle").innerHTML = uniq("vehicle").map(v => `<option value="${escapeHtml(v)}">`).join("");
+  $("dlUnit").innerHTML = uniq("unit").map(v => `<option value="${escapeHtml(v)}">`).join("");
+}
+function openOrderForm(id, preset){
+  const o = state.orders.find(x => x.id === id);
+  editingOrderId = o ? o.id : null;
+  $("orderFormTitle").textContent = o ? `עריכת הזמנה ${o.number || ""}` : "הזמנת עבודה חדשה";
+  const companies = [...state.companies].sort((a, b) => String(a.name).localeCompare(String(b.name), "he"));
+  $("oCompany").innerHTML = `<option value="">— בחירת חברה —</option>` + companies.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+  const lines = [...state.budgetLines].sort((a, b) => String(a.code).localeCompare(String(b.code), "he", { numeric: true }));
+  $("oBudget").innerHTML = `<option value="">— ללא —</option>` + lines.map(b => `<option value="${b.id}">${escapeHtml(budgetLabel(b))}</option>`).join("");
+  fillDatalists();
+  $("oCompany").value = o?.companyId || preset?.companyId || "";
+  $("oDate").value = o?.date || todayISO();
+  $("oNumber").value = o ? (o.number || "") : nextNumber("number");
+  $("oSerial").value = o ? (o.serial || "") : nextNumber("serial");
+  $("oTzadi").value = o?.tzadi || "";
+  $("oVehicle").value = o?.vehicle || "";
+  $("oHours").value = o?.hours || "";
+  $("oHours").placeholder = "";
+  $("oUnit").value = o?.unit || "";
+  $("oRepairs").value = o?.repairs || "";
+  $("oDetails").value = o?.details || "";
+  $("oBudget").value = o?.budgetLineId || "";
+  $("oAmount").value = o?.amount || "";
+  $("btnDeleteOrder").style.display = o ? "" : "none";
+  document.querySelectorAll("#overlayOrder .field").forEach(f => f.classList.remove("invalid"));
+  openSheet("overlayOrder");
+}
+// הקלדת צ' שכבר הופיע בהזמנה קודמת ממלאת את סוג הכלי והיחידה.
+$("oTzadi").addEventListener("change", () => {
+  const t = $("oTzadi").value.trim(); if (!t) return;
+  const prev = [...state.orders].filter(o => o.tzadi === t && o.id !== editingOrderId)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+  if (!prev) return;
+  if (!$("oVehicle").value) $("oVehicle").value = prev.vehicle || "";
+  if (!$("oUnit").value) $("oUnit").value = prev.unit || "";
+  if (prev.hours) $("oHours").placeholder = `קודם: ${prev.hours}`;
+});
+function showOrdersTab(){
+  if (activeTab === "orders") return;
+  activeTab = "orders"; localStorage.setItem("tzahram_tab", activeTab);
+  search = ""; $("searchInput").value = "";
+}
+function collectOrder(){
+  const companyId = $("oCompany").value;
+  if (!companyId){ $("oCompany").parentElement.classList.add("invalid"); toast("צריך לבחור חברה"); return null; }
+  const old = state.orders.find(x => x.id === editingOrderId) || {};
+  return Object.assign({}, old, {
+    id: editingOrderId || uid(),
+    companyId,
+    date: $("oDate").value || todayISO(),
+    number: $("oNumber").value.trim(),
+    serial: $("oSerial").value.trim(),
+    tzadi: $("oTzadi").value.trim(),
+    vehicle: $("oVehicle").value.trim(),
+    hours: $("oHours").value.trim(),
+    unit: $("oUnit").value.trim(),
+    repairs: $("oRepairs").value.trim(),
+    details: $("oDetails").value.trim(),
+    budgetLineId: $("oBudget").value,
+    amount: parseFloat($("oAmount").value) || 0,
+  });
+}
+$("btnSaveOrder").onclick = () => {
+  const o = collectOrder(); if (!o) return;
+  const isNew = !editingOrderId;
+  showOrdersTab(); upsert("orders", o); closeSheet("overlayOrder");
+  toast(isNew ? "ההזמנה נשמרה ✓" : "ההזמנה עודכנה ✓");
+};
+$("btnSaveAndIssue").onclick = () => {
+  const o = collectOrder(); if (!o) return;
+  showOrdersTab(); upsert("orders", o); closeSheet("overlayOrder");
+  issue1007(o.id);
+};
+$("btnDeleteOrder").onclick = () => {
+  if (!editingOrderId) return;
+  closeSheet("overlayOrder");
+  removeItem("orders", editingOrderId);
+};
+
+/* ---------- הפקת הקובץ ---------- */
+function xmlEscape(s){ return String(s ?? "").replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c])); }
+// ערך מרובה שורות: כל ירידת שורה הופכת לשבירת שורה של Word בתוך אותה פסקה.
+function xmlValue(s){
+  return String(s ?? "").split(/\r?\n/).map(xmlEscape).join('</w:t><w:br/><w:t xml:space="preserve">');
+}
+function fieldsFor(o){
+  const c = companyById(o.companyId);
+  return {
+    "[שם החברה]": c?.name || "",
+    "[תאריך הנפקת מסמך]": fmtDateIL(o.date),
+    "[מס' הזמנה]": o.number,
+    "[מס' סודר]": o.serial,
+    "[מס' צ']": o.tzadi,
+    "[סוג הכלי]": o.vehicle,
+    "[שעות מנוע]": o.hours,
+    "[יחידה]": o.unit,
+    "[שדה תיקונים]": o.repairs,
+    "[פירוט התיקון]": o.details,
+  };
+}
+let templateCache = null;
+async function build1007(o){
+  if (typeof JSZip === "undefined") throw new Error("ספריית JSZip לא נטענה (אין אינטרנט?)");
+  if (!templateCache){
+    const res = await fetch(TEMPLATE_URL, { cache: "no-cache" });
+    if (!res.ok) throw new Error("קובץ התבנית 1007 לא נמצא");
+    templateCache = await res.arrayBuffer();
+  }
+  const zip = await JSZip.loadAsync(templateCache);
+  let xml = await zip.file("word/document.xml").async("string");
+  for (const [token, value] of Object.entries(fieldsFor(o))){
+    // בקובץ ה-XML הגרש נשמר כמו שהוא, אבל ליתר ביטחון מחפשים גם את הצורה המקודדת.
+    for (const t of [token, token.replace(/'/g, "&apos;")]) xml = xml.split(t).join(xmlValue(value));
+  }
+  zip.file("word/document.xml", xml);
+  return zip.generateAsync({ type: "blob", mimeType: DOCX_MIME });
+}
+function downloadBlob(blob, name){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+async function issue1007(id, btn){
+  const o = state.orders.find(x => x.id === id); if (!o) return;
+  btn?.classList.add("busy");
+  try{
+    downloadBlob(await build1007(o), "1007.docx");
+    toast("הקובץ 1007 הופק ✓");
+  }catch(e){ console.error(e); toast("ההפקה נכשלה: " + e.message); }
+  finally{ btn?.classList.remove("busy"); }
+}
+
+/* ---------- שליחה ---------- */
+function orderMessage(o){
+  return `שלום, מצורפת הזמנת עבודה מס' ${o.number || ""} (במקום טופס 1007)` +
+    (o.tzadi ? ` עבור צ' ${o.tzadi}` : "") + (o.vehicle ? ` (${o.vehicle})` : "") + ".";
+}
+function openSendSheet(id){
+  const o = state.orders.find(x => x.id === id); if (!o) return;
+  const c = companyById(o.companyId) || {};
+  const wa = waNumber(c.mobile);
+  const canShareFiles = !!(navigator.canShare && navigator.canShare({ files: [new File([""], "1007.docx", { type: DOCX_MIME })] }));
+  $("sendTitle").textContent = `שליחת 1007 ל${c.name || "חברה"}`;
+  $("sendBody").innerHTML = `
+    ${canShareFiles ? `<button class="send-btn" id="sendShare"><span class="ic">📤</span><span>שיתוף הקובץ<small>נפתח תפריט השיתוף — בוחרים וואטסאפ או מייל, והקובץ מצורף</small></span></button>` : ""}
+    <button class="send-btn wa" id="sendWa" ${wa ? "" : 'aria-disabled="true"'}><span class="ic">💬</span><span>וואטסאפ ל${escapeHtml(c.name || "")}<small>${wa ? `<span dir="ltr">${escapeHtml(c.mobile)}</span> · הקובץ יורד, ומצרפים אותו בצ'אט` : "אין נייד בכרטיס החברה"}</small></span></button>
+    <button class="send-btn" id="sendMail" ${c.email ? "" : 'aria-disabled="true"'}><span class="ic">✉️</span><span>מייל ל${escapeHtml(c.name || "")}<small>${c.email ? `<span dir="ltr">${escapeHtml(c.email)}</span> · הקובץ יורד, ומצרפים אותו למייל` : "אין אימייל בכרטיס החברה"}</small></span></button>`;
+  // בונים את הקובץ מראש, כדי שתפריט השיתוף ייפתח מיד בלחיצה (בטלפון מותר לפתוח אותו רק סמוך ללחיצה).
+  const blobP = build1007(o); blobP.catch(() => {});
+  const withFile = async (btn, fn) => {
+    btn.classList.add("busy");
+    try{ await fn(await blobP); }
+    catch(e){ if (e?.name !== "AbortError"){ console.error(e); toast("השליחה נכשלה: " + e.message); } }
+    finally{ btn.classList.remove("busy"); }
+  };
+  if (canShareFiles) $("sendShare").onclick = e => withFile(e.currentTarget, async blob => {
+    await navigator.share({ files: [new File([blob], "1007.docx", { type: DOCX_MIME })], title: "1007", text: orderMessage(o) });
+  });
+  $("sendWa").onclick = e => withFile(e.currentTarget, async blob => {
+    downloadBlob(blob, "1007.docx");
+    window.open(`https://wa.me/${wa}?text=${encodeURIComponent(orderMessage(o))}`, "_blank", "noopener");
+  });
+  $("sendMail").onclick = e => withFile(e.currentTarget, async blob => {
+    downloadBlob(blob, "1007.docx");
+    const subject = `הזמנת עבודה מס' ${o.number || ""} (במקום טופס 1007)`;
+    location.href = `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(orderMessage(o) + "\n\nבברכה")}`;
+  });
+  openSheet("overlaySend");
+}
+
 /* ---------- events ---------- */
 $("tabs").addEventListener("click", e => {
   const b = e.target.closest("[data-tab]"); if (!b) return;
@@ -637,9 +949,13 @@ $("tabs").addEventListener("click", e => {
 $("view").addEventListener("click", e => {
   const b = e.target.closest("[data-edit-budget]"); if (b) return openBudgetForm(b.dataset.editBudget);
   const c = e.target.closest("[data-edit-company]"); if (c) return openCompanyForm(c.dataset.editCompany);
+  const o = e.target.closest("[data-edit-order]"); if (o) return openOrderForm(o.dataset.editOrder);
+  const g = e.target.closest("[data-issue-order]"); if (g) return issue1007(g.dataset.issueOrder, g);
+  const sd = e.target.closest("[data-send-order]"); if (sd) return openSendSheet(sd.dataset.sendOrder);
+  const nb = e.target.closest("[data-new-order-for]"); if (nb) return openOrderForm(null, { companyId: nb.dataset.newOrderFor });
 });
 $("searchInput").addEventListener("input", e => { search = e.target.value.trim(); render(); });
-$("btnAdd").onclick = () => activeTab === "companies" ? openCompanyForm(null) : openBudgetForm(null);
+$("btnAdd").onclick = () => activeTab === "companies" ? openCompanyForm(null) : activeTab === "orders" ? openOrderForm(null) : openBudgetForm(null);
 $("btnSettings").onclick = () => { renderSyncPanel(); openSheet("overlaySettings"); };
 $("syncStatusLine").onclick = () => { renderSyncPanel(); openSheet("overlaySettings"); };
 window.addEventListener("scroll", () => $("topbar").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
@@ -752,7 +1068,7 @@ async function pushNow(){
     const cutoff = now() - 90 * 864e5;
     for (const [k, v] of Object.entries(state.tomb)) if (v < cutoff) delete state.tomb[k];
     await docRef.set({
-      payload: JSON.stringify({ budgetLines: state.budgetLines, companies: state.companies, invoices: state.invoices, tomb: state.tomb }),
+      payload: JSON.stringify({ budgetLines: state.budgetLines, companies: state.companies, orders: state.orders, invoices: state.invoices, tomb: state.tomb }),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: cloudUser.email || "",
     }, { merge: true });

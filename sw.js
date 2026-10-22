@@ -2,14 +2,16 @@
 // sw.js's own bytes, which is what makes the browser notice there's an update at
 // all -- a byte-identical sw.js is never re-installed, no matter how much
 // index.html changed on the server.
-const CACHE_NAME = 'tzahram-budget-v2';
+const CACHE_NAME = 'tzahram-budget-v3';
 const SHELL = [
   './',
   './index.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
-  './logo.svg'
+  './logo.svg',
+  './1007-template.docx',
+  './stamp.png'
 ];
 
 self.addEventListener('install', (event) => {
