@@ -222,7 +222,7 @@
   .meta-chip.bad{background:var(--danger-tint);color:var(--danger);border-color:transparent;}
   .back-btn{display:inline-flex;align-items:center;gap:6px;border:none;background:none;color:var(--pri-dark);font-weight:800;font-size:15px;cursor:pointer;padding:6px 0;margin-top:4px;}
   .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:14px;background:var(--card);box-shadow:var(--shadow);-webkit-overflow-scrolling:touch;}
-  table.ledger{border-collapse:collapse;width:100%;min-width:860px;font-size:13.5px;}
+  table.ledger{border-collapse:collapse;width:100%;min-width:980px;font-size:13.5px;}
   table.ledger th{background:var(--amber-tint);color:var(--ink);font-weight:800;text-align:right;padding:8px 9px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;}
   table.ledger td{padding:8px 9px;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums;}
   table.ledger td.desc{white-space:normal;min-width:180px;}
@@ -268,7 +268,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 11:30</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 11:15</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -294,8 +294,8 @@
       <div class="field"><label for="bOpen">ת.פ (תאריך פתיחה)</label><input id="bOpen" type="date"></div>
       <div class="field"><label for="bValid">תוקף ההזמנה</label><input id="bValid" type="date"></div>
     </div>
-    <div class="field"><label for="bVat">מחיר שורה נלקח מהחשבונית</label>
-      <select id="bVat"><option value="total">כולל מע"מ (סה"כ לתשלום)</option><option value="before">לפני מע"מ</option></select>
+    <div class="field"><label for="bVat">היתרה יורדת לפי</label>
+      <select id="bVat"><option value="total">מחיר כולל מע"מ</option><option value="before">מחיר לפני מע"מ</option></select>
     </div>
     <div class="field"><label for="bTitle">תיאור (לא חובה)</label><input id="bTitle" placeholder="לדוגמה: אחזקת מלגזות ומעמ"סים"></div>
     <div class="field"><label for="bNotes">הערות</label><textarea id="bNotes"></textarea></div>
@@ -358,8 +358,11 @@
     <div class="field"><label for="oRepairs">אבקש לבצע את התיקונים הבאים (תאור התיקון)</label><textarea id="oRepairs" rows="3"></textarea></div>
     <div class="field"><label for="oDetails">התיקון יבוצע</label><textarea id="oDetails" rows="3"></textarea></div>
     <div class="field-group-title">מחיר (לא מודפס בטופס)</div>
-    <div class="field"><label for="oPrice">מחיר (₪)</label><input id="oPrice" type="number" inputmode="decimal" step="0.01" min="0">
-      <div class="hint" id="oPriceHint" style="margin:6px 0 0;">מתמלא אוטומטית מהחשבונית כשמקשרים חשבונית להזמנה. עד אז היתרה בסעיף לא יורדת.</div></div>
+    <div class="grid2">
+      <div class="field"><label for="oPriceBefore">מחיר לפני מע"מ</label><input id="oPriceBefore" type="number" inputmode="decimal" step="0.01" min="0"></div>
+      <div class="field"><label for="oPriceTotal">מחיר כולל מע"מ</label><input id="oPriceTotal" type="number" inputmode="decimal" step="0.01" min="0"></div>
+    </div>
+    <div class="hint" id="oPriceHint" style="margin:-6px 0 14px;"></div>
     <div class="sheet-actions">
       <button class="btn-primary" id="btnSaveOrder">שמירה</button>
       <button class="btn-ghost btn-danger-outline" id="btnDeleteOrder">מחיקה</button>
@@ -525,7 +528,15 @@ function migrateState(s){
     if (b.title == null && b.name) b.title = b.name;
     if (!b.vatMode) b.vatMode = "total";
   }
-  for (const o of s.orders || []) if (o.price == null && o.amount) o.price = o.amount;
+  const vatOf = id => (s.budgetLines || []).find(b => b.id === id)?.vatMode;
+  for (const o of s.orders || []){
+    if (o.price == null && o.amount) o.price = o.amount;
+    // מחיר יחיד מגרסה קודמת → לפני מע"מ / כולל מע"מ לפי הגדרת הסעיף
+    if (o.price != null && o.price !== "" && o.priceBefore == null && o.priceTotal == null){
+      if (vatOf(o.budgetLineId) === "before") o.priceBefore = Number(o.price); else o.priceTotal = Number(o.price);
+      o.price = null;
+    }
+  }
   return s;
 }
 function loadState(){
@@ -688,7 +699,7 @@ function lineRows(l){
   let bal = Number(l.amount) || 0;
   return rows.map(o => {
     const price = orderPrice(o); bal -= price;
-    return { o, price, balance: Math.round(bal * 100) / 100, inv: invoiceForOrder(o.id) };
+    return { o, price, prices: orderPrices(o), balance: round2(bal), inv: invoiceForOrder(o.id) };
   });
 }
 function renderLineDetail(l){
@@ -697,7 +708,7 @@ function renderLineDetail(l){
   const all = lineRows(l);
   const q = search.toLowerCase();
   const rows = !q ? all : all.filter(r => [r.o.serial, r.o.tzadi, r.o.vehicle, r.o.unit, r.o.repairs, r.inv?.number].join(" ").toLowerCase().includes(q));
-  const head = ["סודר", "מספר צ'", "סוג הכלי", "יחידה", "תחילה", "סיום", 'שע"מ', "מחיר", "יתרה", "חשבונית", "תאור התיקון"];
+  const head = ["סודר", "מספר צ'", "סוג הכלי", "יחידה", "תחילה", "סיום", 'שע"מ', 'מחיר לפני מע"מ', 'מחיר כולל מע"מ', "יתרה", "חשבונית", "תאור התיקון"];
   return `
     <button class="back-btn" id="btnBackLines">→ כל הסעיפים</button>
     <div class="sec-card" style="margin-top:6px;">
@@ -710,7 +721,7 @@ function renderLineDetail(l){
         <div style="text-align:left;flex:none;"><div style="font-weight:900;font-size:19px;" class="tnum">${fmtMoney(rem)}</div><div class="sec-sub">יתרה</div></div>
       </div>
       <div class="sec-body">
-        <div class="meta-chips">${lineChips(l)}<span class="meta-chip">מחיר שורה <b>${l.vatMode === "before" ? "לפני מע\"מ" : "כולל מע\"מ"}</b></span></div>
+        <div class="meta-chips">${lineChips(l)}<span class="meta-chip">היתרה יורדת לפי <b>${l.vatMode === "before" ? "מחיר לפני מע\"מ" : "מחיר כולל מע\"מ"}</b></span></div>
         ${l.notes ? `<div class="item-note">${escapeHtml(l.notes)}</div>` : ""}
         <div class="item-actions">
           <button class="mini-btn pri" data-new-row="${l.id}">➕ שורה חדשה (1007)</button>
@@ -724,7 +735,7 @@ function renderLineDetail(l){
     <div class="table-wrap"><table class="ledger">
       <thead><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr></thead>
       <tbody>
-        <tr class="start"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>${fmtMoney(amt)}</td><td></td><td></td></tr>
+        <tr class="start"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>${fmtMoney(amt)}</td><td></td><td></td></tr>
         ${rows.map(r => `<tr class="row" data-row-order="${r.o.id}">
           <td>${escapeHtml(r.o.serial || "")}</td>
           <td class="ltr">${escapeHtml(r.o.tzadi || "")}</td>
@@ -733,7 +744,7 @@ function renderLineDetail(l){
           <td>${escapeHtml(fmtDateIL(r.o.date))}</td>
           <td>${escapeHtml(fmtDateIL(r.o.endDate))}</td>
           <td>${escapeHtml(r.o.hours || "")}</td>
-          <td>${r.price ? fmtMoney(r.price) : `<span class="pill-open">פתוחה</span>`}</td>
+          ${r.prices ? `<td class="${l.vatMode === "before" ? "" : "muted"}">${fmtMoney(r.prices.before)}</td><td class="${l.vatMode === "before" ? "muted" : ""}">${fmtMoney(r.prices.total)}</td>` : `<td colspan="2"><span class="pill-open">פתוחה</span></td>`}
           <td class="${r.balance < 0 ? "" : "muted"}" style="${r.balance < 0 ? "color:var(--danger);font-weight:800" : ""}">${fmtMoney(r.balance)}</td>
           <td class="ltr">${r.inv ? escapeHtml(r.inv.number || "✓") : ""}</td>
           <td class="desc">${escapeHtml(String(r.o.repairs || "").split("\n")[0])}</td>
@@ -752,16 +763,16 @@ function exportLine(id){
     l.validUntil ? `(תוקף ההזמנה ${fmtDateIL(l.validUntil)})` : ""].filter(Boolean).join("  ");
   const aoa = [
     [l.index || "", title],
-    ["סודר", "מספר צ", "סוג הכלי", "יחידה", "תחילה", "סיום", 'שע"מ', "מחיר", "יתרה", "חשבונית", "תאור התיקון"],
-    ["", "", "", "", "", "", "", "", Number(l.amount) || 0, "", ""],
+    ["סודר", "מספר צ", "סוג הכלי", "יחידה", "תחילה", "סיום", 'שע"מ', 'מחיר לפני מע"מ', 'מחיר כולל מע"מ', "יתרה", "חשבונית", "תאור התיקון"],
+    ["", "", "", "", "", "", "", "", "", Number(l.amount) || 0, "", ""],
     ...lineRows(l).map(r => [
       parseInt(r.o.serial) || r.o.serial || "", r.o.tzadi || "", r.o.vehicle || "", r.o.unit || "",
       fmtDateIL(r.o.date), fmtDateIL(r.o.endDate), r.o.hours ? (parseInt(r.o.hours) || r.o.hours) : "",
-      r.price || "", r.balance, r.inv?.number || "", r.o.repairs || ""]),
+      r.prices ? r.prices.before : "", r.prices ? r.prices.total : "", r.balance, r.inv?.number || "", r.o.repairs || ""]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [6, 11, 16, 10, 10, 10, 8, 11, 12, 15, 40].map(w => ({ wch: w }));
-  ws["!merges"] = [{ s: { r: 0, c: 1 }, e: { r: 0, c: 10 } }];
+  ws["!cols"] = [6, 11, 16, 10, 10, 10, 8, 13, 13, 12, 15, 40].map(w => ({ wch: w }));
+  ws["!merges"] = [{ s: { r: 0, c: 1 }, e: { r: 0, c: 11 } }];
   const wb = XLSX.utils.book_new();
   wb.Workbook = { Views: [{ RTL: true }] };
   XLSX.utils.book_append_sheet(wb, ws, `סעיף ${l.index || ""}`.trim().slice(0, 31));
@@ -982,7 +993,7 @@ function renderOrders(){
           <div class="item-title" style="margin-top:6px;">${escapeHtml(c?.name || "חברה לא נבחרה")}</div>
           <div class="item-sub">${escapeHtml(fmtDateIL(o.date))}</div>
         </div>
-        <div class="item-amt"><div class="big">${orderPrice(o) ? fmtMoney(orderPrice(o)) : "—"}</div><div class="small">${orderPrice(o) ? (invoiceForOrder(o.id) ? "לפי חשבונית" : "מחיר") : "פתוחה"}</div></div>
+        <div class="item-amt">${orderPrices(o) ? `<div class="big">${fmtMoney(orderPrices(o).total)}</div><div class="small">לפני מע"מ ${fmtMoney(orderPrices(o).before)}</div>` : `<div class="big">—</div><div class="small">פתוחה</div>`}</div>
       </div>
       <div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
       <div class="item-actions">
@@ -1030,15 +1041,20 @@ function openOrderForm(id, preset){
   $("oRepairs").value = o?.repairs || "";
   $("oDetails").value = o?.details || "";
   const inv = o && invoiceForOrder(o.id);
-  $("oPrice").value = inv ? orderPrice(o) : (o?.price ?? "");
-  $("oPrice").disabled = !!inv;
+  const pr = o ? orderPrices(o) : null;
+  $("oPriceBefore").value = pr ? pr.before : "";
+  $("oPriceTotal").value = pr ? pr.total : "";
+  $("oPriceBefore").disabled = $("oPriceTotal").disabled = !!inv;
   $("oPriceHint").textContent = inv
-    ? `לפי חשבונית ${inv.number || ""} (${line?.vatMode === "before" ? "לפני מע\"מ" : "כולל מע\"מ"}). לשינוי — עורכים את החשבונית.`
-    : "מתמלא אוטומטית מהחשבונית כשמקשרים חשבונית להזמנה. עד אז היתרה בסעיף לא יורדת.";
+    ? `לפי חשבונית ${inv.number || ""}. לשינוי — עורכים את החשבונית.`
+    : `מתמלא אוטומטית מהחשבונית כשמקשרים חשבונית להזמנה. אפשר גם להקליד אחד מהם — השני מחושב לפי מע"מ ${VAT_RATE * 100}%. בלי מחיר היתרה בסעיף לא יורדת.`;
   $("btnDeleteOrder").style.display = o ? "" : "none";
   document.querySelectorAll("#overlayOrder .field").forEach(f => f.classList.remove("invalid"));
   openSheet("overlayOrder");
 }
+// מחיר: הקלדה באחד מהשדות מחשבת את השני לפי שיעור המע"מ
+$("oPriceBefore").addEventListener("input", () => { const v = parseFloat($("oPriceBefore").value); $("oPriceTotal").value = v >= 0 ? round2(v * (1 + VAT_RATE)) : ""; });
+$("oPriceTotal").addEventListener("input", () => { const v = parseFloat($("oPriceTotal").value); $("oPriceBefore").value = v >= 0 ? round2(v / (1 + VAT_RATE)) : ""; });
 // בחירת סעיף ממלאת את החברה, את מספר ההזמנה ואת הסודר הבא בסעיף
 $("oBudget").addEventListener("change", () => {
   const line = budgetById($("oBudget").value); if (!line) return;
@@ -1081,7 +1097,9 @@ function collectOrder(){
     repairs: $("oRepairs").value.trim(),
     details: $("oDetails").value.trim(),
     budgetLineId: $("oBudget").value,
-    price: $("oPrice").value === "" ? null : (parseFloat($("oPrice").value) || 0),
+    priceBefore: $("oPriceBefore").value === "" ? null : (parseFloat($("oPriceBefore").value) || 0),
+    priceTotal: $("oPriceTotal").value === "" ? null : (parseFloat($("oPriceTotal").value) || 0),
+    price: null,
   });
 }
 $("btnSaveOrder").onclick = () => {
@@ -1222,20 +1240,28 @@ const fileDel = id => fileOp("readwrite", s => s.delete(id));
 function orderById(id){ return state.orders.find(o => o.id === id); }
 function invoiceLineId(inv){ return inv.budgetLineId || orderById(inv.orderId)?.budgetLineId || ""; }
 function invoiceForOrder(orderId){ return state.invoices.find(i => i.orderId === orderId); }
-// סכום חשבונית כפי שנספר בסעיף: כולל מע"מ, או לפני מע"מ — לפי הגדרת הסעיף.
-function invoiceAmount(inv, line){
-  if (line?.vatMode === "before"){
-    if (inv.beforeVat) return Number(inv.beforeVat);
-    if (inv.vat) return Math.round((Number(inv.total) - Number(inv.vat)) * 100) / 100;
-    return Math.round(Number(inv.total) / 1.18 * 100) / 100;
-  }
-  return Number(inv.total) || 0;
+const VAT_RATE = 0.18;
+function round2(x){ return Math.round(x * 100) / 100; }
+function invoicePrices(inv){
+  const total = Number(inv.total) || 0;
+  const before = inv.beforeVat ? Number(inv.beforeVat) : inv.vat ? round2(total - Number(inv.vat)) : round2(total / (1 + VAT_RATE));
+  return { before, total };
 }
-// מחיר שורה: מהחשבונית המקושרת אם יש, אחרת המחיר שהוזן ידנית. בלי מחיר — השורה פתוחה ולא מורידה מהיתרה.
-function orderPrice(o){
+// סכום חשבונית כפי שנספר ביתרת הסעיף: כולל מע"מ, או לפני מע"מ — לפי הגדרת הסעיף.
+function invoiceAmount(inv, line){ const p = invoicePrices(inv); return line?.vatMode === "before" ? p.before : p.total; }
+// מחיר שורה (לפני מע"מ וכולל מע"מ): מהחשבונית המקושרת אם יש, אחרת מה שהוזן ידנית. null = שורה פתוחה.
+function orderPrices(o){
   const inv = invoiceForOrder(o.id);
-  if (inv) return invoiceAmount(inv, budgetById(o.budgetLineId));
-  return o.price != null && o.price !== "" ? Number(o.price) || 0 : 0;
+  if (inv) return invoicePrices(inv);
+  const b = o.priceBefore != null && o.priceBefore !== "" ? Number(o.priceBefore) : null;
+  const t = o.priceTotal != null && o.priceTotal !== "" ? Number(o.priceTotal) : null;
+  if (b == null && t == null) return null;
+  return { before: b ?? round2(t / (1 + VAT_RATE)), total: t ?? round2(b * (1 + VAT_RATE)) };
+}
+// המחיר שמוריד מהיתרה — לפי הגדרת הסעיף. 0 = שורה פתוחה.
+function orderPrice(o){
+  const p = orderPrices(o); if (!p) return 0;
+  return budgetById(o.budgetLineId)?.vatMode === "before" ? p.before : p.total;
 }
 function lineUsage(lineId){
   const line = budgetById(lineId);
@@ -1582,14 +1608,16 @@ function initFirebase(){
     try{ fbFunctions = app.functions("europe-west1"); }catch(e){ console.warn("functions sdk missing", e); }
     fbAuth.getRedirectResult().catch(e => { if (e?.code && e.code !== "auth/no-auth-event") toast("ההתחברות נכשלה: " + (e.message || e.code)); });
     setSyncStatus("syncing", "מתחבר...");
-    fbAuth.onAuthStateChanged(user => {
+    fbAuth.onAuthStateChanged(async user => {
       cloudUser = user;
       if (unsub){ unsub(); unsub = null; }
       if (user){
-        docRef = fbDb.collection("users").doc(user.uid).collection("data").doc("state");
+        setSyncStatus("syncing", "מתחבר לנתונים...");
+        await resolveSyncTarget(user);
+        if (cloudUser !== user) return;   // התנתק או החליף חשבון בינתיים
         startListener();
       } else {
-        docRef = null; lastRemoteJson = null;
+        docRef = null; lastRemoteJson = null; sharedFrom = null; shareMembers = [];
         setSyncStatus("", "לא מחובר · לחצו להתחברות לסנכרון");
       }
       renderSyncPanel();
@@ -1600,6 +1628,65 @@ function initFirebase(){
   }
 }
 
+/* ---------- שיתוף (כמו ב-TripCost) ----------
+   הבעלים מוסיף מייל: הוא נכנס ל-members במסמך הנתונים שלו, ונוצר invites/{email} שמפנה אליו.
+   חשבון משותף שמתחבר מוצא את ההזמנה ומסתנכרן עם אותו מסמך — רואה ועורך את אותם נתונים,
+   ויכול גם לסרוק חשבוניות (הפונקציה בשרת בודקת את אותה רשימת members). */
+let sharedFrom = null;     // {ownerUid, ownerEmail, ownerName} כשעובדים על הנתונים של חשבון אחר
+let shareMembers = [];     // המיילים שהבעלים שיתף איתם
+async function resolveSyncTarget(user){
+  let ownerUid = user.uid;
+  sharedFrom = null;
+  if (user.email){
+    try{
+      const inv = await fbDb.collection("invites").doc(user.email.toLowerCase()).get();
+      const d = inv.exists ? inv.data() : null;
+      if (d && d.ownerUid && d.ownerUid !== user.uid){ ownerUid = d.ownerUid; sharedFrom = d; }
+    }catch(e){ console.warn("invite lookup failed", e); }
+  }
+  docRef = fbDb.collection("users").doc(ownerUid).collection("data").doc("state");
+}
+async function addShare(){
+  const input = $("shareEmailInput");
+  const email = (input.value || "").trim().toLowerCase();
+  if (!cloudUser || !docRef || sharedFrom) return;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ toast("כתובת המייל לא תקינה"); return; }
+  if (email === (cloudUser.email || "").toLowerCase()){ toast("זה החשבון שלך 🙂"); return; }
+  if (shareMembers.includes(email)){ toast("כבר משותף עם החשבון הזה"); return; }
+  $("btnAddShare").disabled = true;
+  try{
+    const batch = fbDb.batch();
+    batch.set(fbDb.collection("invites").doc(email), {
+      ownerUid: cloudUser.uid,
+      ownerEmail: (cloudUser.email || "").toLowerCase(),
+      ownerName: cloudUser.displayName || "",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    batch.set(docRef, { members: firebase.firestore.FieldValue.arrayUnion(email) }, { merge: true });
+    await batch.commit();
+    input.value = "";
+    toast("השיתוף נוסף ✓");
+  }catch(e){
+    console.error(e);
+    toast(e?.code === "permission-denied" ? "אין הרשאה — אולי החשבון כבר משותף עם מישהו אחר" : "השיתוף נכשל: " + (e.message || e.code || ""));
+  }
+  $("btnAddShare").disabled = false;
+}
+async function removeShare(email){
+  if (!cloudUser || !docRef || sharedFrom) return;
+  if (!confirm(`להסיר את השיתוף עם ${email}?`)) return;
+  try{
+    const batch = fbDb.batch();
+    batch.delete(fbDb.collection("invites").doc(email));
+    batch.set(docRef, { members: firebase.firestore.FieldValue.arrayRemove(email) }, { merge: true });
+    await batch.commit();
+    toast("השיתוף הוסר");
+  }catch(e){ console.error(e); toast("ההסרה נכשלה: " + (e.message || e.code || "")); }
+}
+function connectedLabel(){
+  return sharedFrom ? `מחובר לנתונים של ${sharedFrom.ownerName || sharedFrom.ownerEmail || "חשבון משותף"}` : `מחובר כ-${cloudUser.displayName || cloudUser.email}`;
+}
+
 function startListener(){
   setSyncStatus("syncing", "מסנכרן...");
   unsub = docRef.onSnapshot(snap => {
@@ -1608,13 +1695,15 @@ function startListener(){
       try{ remote = migrateState(Object.assign(defaultState(), JSON.parse(snap.data().payload || "{}"))); }catch(e){ console.warn("bad payload", e); }
     }
     lastRemoteJson = syncedJson(remote);
+    const newMembers = (snap.exists && snap.data().members) || [];
+    if (JSON.stringify(newMembers) !== JSON.stringify(shareMembers)){ shareMembers = newMembers; if ($("overlaySettings").classList.contains("show")) renderSyncPanel(); }
     const merged = mergeStates(state, remote);
     const changedLocal = syncedJson(merged) !== syncedJson(state);
     state = merged;
     localStorage.setItem(STATE_KEY, JSON.stringify(state));
     if (changedLocal) render();
     if (syncedJson(merged) !== lastRemoteJson) schedulePush(0);
-    setSyncStatus("on", `מחובר כ-${cloudUser.displayName || cloudUser.email}`);
+    setSyncStatus("on", connectedLabel());
   }, err => {
     console.error(err);
     setSyncStatus("err", err.code === "permission-denied" ? "אין הרשאה — בדקו את חוקי Firestore" : "שגיאת סנכרון");
@@ -1631,6 +1720,7 @@ async function pushNow(){
   const json = syncedJson(state);
   if (json === lastRemoteJson) return;
   setSyncStatus("syncing", "שומר בענן...");
+  const done = () => setTimeout(() => { if (cloudUser) setSyncStatus("on", connectedLabel()); }, 300);
   try{
     // מסירים מחיקות ישנות מ-90 יום כדי שהמסמך לא יגדל לנצח.
     const cutoff = now() - 90 * 864e5;
@@ -1640,6 +1730,7 @@ async function pushNow(){
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: cloudUser.email || "",
     }, { merge: true });
+    done();
   }catch(e){
     console.error(e);
     setSyncStatus("err", "השמירה בענן נכשלה — הנתונים שמורים במכשיר");
@@ -1671,8 +1762,22 @@ function renderSyncPanel(){
         ${cloudUser.photoURL ? `<img src="${escapeHtml(cloudUser.photoURL)}" alt="">` : ""}
         <div style="min-width:0;flex:1;"><div style="font-weight:800;">${escapeHtml(cloudUser.displayName || "")}</div><div style="font-size:13px;color:var(--ink-soft);direction:ltr;text-align:right;">${escapeHtml(cloudUser.email || "")}</div></div>
       </div>
-      <button class="btn-ghost" style="width:100%;" id="btnSignOut">התנתקות</button>`;
+      <button class="btn-ghost" style="width:100%;" id="btnSignOut">התנתקות</button>
+      <div class="divider"></div>
+      <div class="section-title" style="margin:0 2px 10px;"><span>👥 שיתוף</span></div>
+      ${sharedFrom ? `<p class="hint" style="margin:0;">אתה עובד על הנתונים של <b>${escapeHtml(sharedFrom.ownerName || "")}</b> <span dir="ltr">${escapeHtml(sharedFrom.ownerEmail || "")}</span> — עם אותן הרשאות. רק הבעלים יכול להוסיף או להסיר שיתוף.</p>` : `
+        <p class="hint" style="margin:0 0 10px;">חשבון Google שמוסיפים כאן רואה ועורך את כל הנתונים כמוך, ויכול לסרוק חשבוניות.</p>
+        ${shareMembers.map(e => `<div class="sync-user" style="padding:9px 12px;margin-bottom:8px;"><span style="flex:1;direction:ltr;text-align:right;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(e)}</span><button class="mini-btn danger" data-remove-share="${escapeHtml(e)}">הסרה</button></div>`).join("")}
+        <div style="display:flex;gap:8px;">
+          <input type="email" id="shareEmailInput" class="search-input" style="margin:0;direction:ltr;text-align:right;" placeholder="name@gmail.com" inputmode="email">
+          <button class="btn-primary" style="flex:none;padding:11px 18px;" id="btnAddShare">הוספה</button>
+        </div>`}`;
     $("btnSignOut").onclick = signOut;
+    if (!sharedFrom){
+      $("btnAddShare").onclick = addShare;
+      $("shareEmailInput").onkeydown = e => { if (e.key === "Enter") addShare(); };
+      p.querySelectorAll("[data-remove-share]").forEach(b => b.onclick = () => removeShare(b.dataset.removeShare));
+    }
   } else {
     p.innerHTML = `<button class="btn-primary" style="width:100%;" id="btnSignIn">התחברות עם Google</button>
       <p class="hint" style="margin:10px 0 0;">אחרי ההתחברות, מה שכבר שמור במכשיר ימוזג עם הענן.</p>`;
