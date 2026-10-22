@@ -19,7 +19,7 @@
 
 ## הגדרה חד-פעמית
 
-1. **ריפו:** ליצור ב-GitHub ריפו חדש (למשל `tzahram-budget`) ולהעלות את כל הקבצים.
+1. **ריפו:** ליצור ב-GitHub הריפו `budget` ולהעלות את כל הקבצים.
    Settings ← Pages ← Source: `main` / root.
 2. **Firebase:** ב-[Firebase Console](https://console.firebase.google.com/) ← Add project.
    - Build ← **Authentication** ← Get started ← Sign-in method ← **Google** ← Enable.
@@ -27,7 +27,7 @@
    - Build ← **Firestore Database** ← Create database (אזור `europe-west1`) ← Rules ← להדביק את `firestore.rules` ← Publish.
    - Project settings ← Your apps ← **Web** (`</>`) ← Register ← להעתיק את ה-`firebaseConfig`.
 3. **חיבור האתר:** להדביק את ה-config ב-`DEFAULT_FIREBASE_CONFIG` בתוך `index.html`
-   (או באתר עצמו: תפריט ← הגדרת Firebase).
+   — כבר מוגדר לפרויקט `budget-73660`.
 
 ## פריסת האתר
 

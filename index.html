@@ -222,7 +222,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 10:00</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 09:50</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -314,7 +314,14 @@
 const STATE_KEY = "tzahram_budget_state_v1";
 const FB_CONFIG_KEY = "tzahram_budget_fbcfg";
 // אחרי יצירת פרויקט ה-Firebase אפשר להדביק כאן את ה-config כדי שלא יהיה צורך להגדיר בכל מכשיר.
-const DEFAULT_FIREBASE_CONFIG = null;
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBUMy3aTcGNJjCju2zO-bIwwlevRXCfUk0",
+  authDomain: "budget-73660.firebaseapp.com",
+  projectId: "budget-73660",
+  storageBucket: "budget-73660.firebasestorage.app",
+  messagingSenderId: "920210124583",
+  appId: "1:920210124583:web:54900018633a831e72c302"
+};
 
 const TABS = [
   { id: "budget",    label: "סעיפי תקציב", icon: "📊" },
