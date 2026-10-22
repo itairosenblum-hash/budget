@@ -327,7 +327,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 13:20</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 13:25</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -446,7 +446,7 @@
     <div class="file-row">
       <label class="mini-btn" style="cursor:pointer;">📎 צירוף קובץ<input type="file" id="iFileInput" accept="image/*,application/pdf" hidden></label>
       <span class="fname" id="iFileName">לא צורף קובץ</span>
-      <button class="mini-btn pri" id="btnScanFile" type="button">✨ קריאה אוטומטית</button>
+      <button class="mini-btn" id="btnScanFile" type="button">🔄 קריאה מחדש</button>
       <button class="mini-btn danger" id="btnRemoveFile" type="button" aria-label="הסרת הקובץ">✕</button>
     </div>
     <div class="field"><label for="iCompany">חברה</label><select id="iCompany"></select></div>
@@ -1892,7 +1892,8 @@ async function pickFile(f, autoScan){
   renderFileRow(pendingFile.name);
   if (autoScan) scanPendingFile();
 }
-$("iFileInput").onchange = e => { pickFile(e.target.files[0], false); e.target.value = ""; };
+// כל העלאת קובץ נקראת מיד אוטומטית (גם מ"צירוף קובץ" בתוך הטופס)
+$("iFileInput").onchange = e => { pickFile(e.target.files[0], true); e.target.value = ""; };
 $("scanInput").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; openInvoiceForm(null); pickFile(f, true); };
 $("btnScanFile").onclick = () => scanPendingFile();
 $("btnRemoveFile").onclick = () => { pendingFile = null; pendingFileRemoved = true; renderFileRow(""); };
@@ -1951,7 +1952,7 @@ async function scanPendingFile(){
     const notDeployed = /not-found|internal/.test(e?.code || "") && !e?.details && !e?.message;
     lift.fail(notDeployed ? "שירות הקריאה עוד לא הופעל" : (e?.message || "הקריאה נכשלה — אפשר למלא ידנית"));
   }finally{
-    scanning = false; btn.classList.remove("busy"); btn.textContent = "✨ קריאה אוטומטית";
+    scanning = false; btn.classList.remove("busy"); btn.textContent = "🔄 קריאה מחדש";
   }
 }
 function applyScan(r){
