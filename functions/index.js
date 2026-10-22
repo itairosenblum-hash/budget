@@ -4,6 +4,7 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { setGlobalOptions, logger } from "firebase-functions/v2";
 import { defineSecret, defineString } from "firebase-functions/params";
@@ -40,6 +41,48 @@ async function requireAllowed(request) {
   }
   throw new HttpsError("permission-denied", "אין הרשאה לסריקת חשבוניות");
 }
+
+/* ---------- קבצים (Firebase Storage) ----------
+   קבצי החשבוניות (המקור והחתום) נשמרים ב-Storage דרך הפונקציות, כך שהבדיקה מי מורשה
+   היא אותה בדיקה כמו בסריקה, וה-Storage עצמו סגור ללקוחות. */
+const BUCKET = process.env.STORAGE_BUCKET || "budget-73660.firebasestorage.app";
+const bucket = () => getStorage().bucket(BUCKET);
+const fileKey = (k) => {
+  const key = String(k || "");
+  if (!/^[A-Za-z0-9_-]{4,80}$/.test(key)) throw new HttpsError("invalid-argument", "מזהה קובץ לא תקין");
+  return `invoices/${key}`;
+};
+
+export const uploadFile = onCall({ timeoutSeconds: 120, memory: "512MiB" }, async (request) => {
+  const email = await requireAllowed(request);
+  const { key, data, mimeType, name } = request.data || {};
+  const type = String(mimeType || "");
+  if (!isAllowedType(type)) throw new HttpsError("invalid-argument", `סוג קובץ לא נתמך: ${type}`);
+  const buffer = Buffer.from(String(data || ""), "base64");
+  if (!buffer.length) throw new HttpsError("invalid-argument", "הקובץ ריק");
+  if (buffer.length > MAX_BYTES) throw new HttpsError("invalid-argument", "הקובץ גדול מדי (עד 7MB)");
+  await bucket().file(fileKey(key)).save(buffer, {
+    resumable: false,
+    contentType: type,
+    metadata: { metadata: { name: String(name || "").slice(0, 120), uploadedBy: email } }
+  });
+  return { ok: true, size: buffer.length };
+});
+
+export const getFile = onCall({ timeoutSeconds: 60, memory: "512MiB" }, async (request) => {
+  await requireAllowed(request);
+  const f = bucket().file(fileKey(request.data?.key));
+  const [exists] = await f.exists();
+  if (!exists) throw new HttpsError("not-found", "הקובץ לא נמצא בענן");
+  const [[meta], [buf]] = await Promise.all([f.getMetadata(), f.download()]);
+  return { data: buf.toString("base64"), mimeType: meta.contentType || "application/octet-stream", name: meta.metadata?.name || "" };
+});
+
+export const deleteFile = onCall({ timeoutSeconds: 60 }, async (request) => {
+  await requireAllowed(request);
+  await bucket().file(fileKey(request.data?.key)).delete({ ignoreNotFound: true });
+  return { ok: true };
+});
 
 /* ---------- קריאת חשבונית ---------- */
 

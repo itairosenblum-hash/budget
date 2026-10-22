@@ -1,5 +1,5 @@
 name: Deploy Firebase functions
-# פריסה אוטומטית של ה-Cloud Functions (קריאת חשבוניות) בכל שינוי בהן ב-main (גם ידנית: Run workflow).
+# פריסה אוטומטית של ה-Cloud Functions (קריאת חשבוניות ושמירת קבצים) בכל שינוי בהן ב-main (גם ידנית: Run workflow).
 # נדרשים Secrets בריפו: FIREBASE_SERVICE_ACCOUNT, GEMINI_API_KEY
 # חוקי Firestore לא נפרסים מכאן, הם ממשיכים להתעדכן ידנית ב-Firebase Console.
 
@@ -18,7 +18,7 @@ concurrency:
 
 env:
   PROJECT: budget-73660
-  SERVICES: scaninvoice
+  SERVICES: scaninvoice uploadfile getfile deletefile
 
 jobs:
   deploy:

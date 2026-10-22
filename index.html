@@ -205,6 +205,10 @@
   .send-btn[aria-disabled="true"]{opacity:.45;pointer-events:none;}
   .send-btn.wa .ic{background:#DDF5E6;}
   .busy{opacity:.6;pointer-events:none;}
+  .stamp-stage{position:relative;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#fff;min-height:120px;touch-action:none;user-select:none;}
+  .stamp-stage .stamp-page{display:block;width:100%;height:auto;}
+  .stamp-stage .stamp-overlay{position:absolute;cursor:grab;outline:2px dashed var(--amber);outline-offset:2px;touch-action:none;}
+  .stamp-stage .stamp-overlay:active{cursor:grabbing;}
   .date-wrap{position:relative;}
   .date-wrap input.date-il{padding-left:44px;}
   .date-wrap .cal-btn{position:absolute;left:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;border:none;background:transparent;font-size:18px;cursor:pointer;border-radius:8px;}
@@ -273,7 +277,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 11:40</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 12:05</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -416,6 +420,25 @@
 </div>
 <datalist id="dlDocType"><option value="חשבונית מס"><option value="חשבונית מס קבלה"><option value="חשבון עסקה"><option value="קבלה"></datalist>
 <input type="file" id="scanInput" accept="image/*,application/pdf" hidden>
+
+<!-- Stamp sheet -->
+<div class="overlay" id="overlayStamp">
+  <div class="sheet" style="max-width:600px;">
+    <div class="sheet-handle"></div>
+    <h2>הטבעת חותמת</h2>
+    <div class="grid2">
+      <div class="field"><label for="sDate">תאריך החתימה</label><input id="sDate" class="ltr date-il" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off"></div>
+      <div class="field" id="stampPageRow"><label for="sPage">עמוד</label><select id="sPage"></select></div>
+    </div>
+    <div class="hint" style="margin:-4px 0 10px;">גוררים את החותמת למקום פנוי בחשבונית. המיקום נשמר לפעם הבאה.</div>
+    <div id="stampStage" class="stamp-stage"></div>
+    <div class="field" style="margin-top:12px;"><label for="sSize">גודל החותמת</label><input id="sSize" type="range" min="15" max="90" value="50" style="width:100%;"></div>
+    <div class="sheet-actions">
+      <button class="btn-primary" id="btnSaveStamp">שמירה ושליחה</button>
+      <button class="btn-ghost" data-close>ביטול</button>
+    </div>
+  </div>
+</div>
 
 <!-- Send 1007 sheet -->
 <div class="overlay" id="overlaySend">
@@ -640,7 +663,7 @@ function removeItem(listName, id){
   if (i < 0) return;
   const [removed] = list.splice(i, 1);
   // הקובץ המקומי של חשבונית נמחק רק אם המחיקה לא בוטלה תוך כמה שניות.
-  if (listName === "invoices" && removed.hasFile) setTimeout(() => { if (!state.invoices.some(x => x.id === id)) fileDel(id).catch(() => {}); }, 8000);
+  if (listName === "invoices" && removed.hasFile) setTimeout(() => { if (!state.invoices.some(x => x.id === id)){ removeFile(id); removeFile(id + "_s"); } }, 8000);
   state.tomb[id] = now();
   saveState(); render();
   showUndo("נמחק", () => {
@@ -1481,7 +1504,7 @@ function openSendSheet(id){
 
 /* =====================================================================
    חשבוניות — סריקה עם Gemini (Cloud Function scanInvoice), שיוך לחברה, להזמנה ולסעיף.
-   הקובץ עצמו נשמר כרגע במכשיר (IndexedDB) לצורך הטבעת חותמת ושליחה בשלב הבא.
+   הקובץ נשמר במכשיר וב-Firebase Storage (ראו storeFile), לצפייה, חותמת ושליחה מכל מכשיר.
    ===================================================================== */
 const FILES_DB = "tzahram_budget_files";
 function openFilesDB(){
@@ -1571,13 +1594,15 @@ function renderInvoices(){
         <div style="min-width:0;">
           <span class="order-no" style="background:var(--pri-tint);color:var(--pri-dark);">${escapeHtml(i.docType || "חשבונית")} ${escapeHtml(i.number || "")}</span>
           <div class="item-title" style="margin-top:6px;">${escapeHtml(c?.name || "חברה לא נבחרה")}</div>
-          <div class="item-sub">${escapeHtml(fmtDateIL(i.date))}</div>
+          <div class="item-sub">${escapeHtml(fmtDateIL(i.date))}${i.stamped ? ` · <span style="color:var(--good);font-weight:800;">✅ נבדקה והוזרמה ${escapeHtml(fmtDateIL(i.stamped.date))}</span>` : ""}</div>
         </div>
         <div class="item-amt"><div class="big">${fmtMoney(i.total)}</div><div class="small">כולל מע"מ</div></div>
       </div>
       <div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
       <div class="item-actions">
-        ${i.hasFile ? `<button class="mini-btn pri" data-view-invoice="${i.id}">👁️ צפייה</button>` : ""}
+        ${i.hasFile ? `<button class="mini-btn pri" data-stamp-invoice="${i.id}">🖋️ ${i.stamped ? "חותמת מחדש" : "חותמת"}</button>` : ""}
+        ${i.stamped ? `<button class="mini-btn" data-view-stamped="${i.id}">👁️ החתומה</button>` : i.hasFile ? `<button class="mini-btn" data-view-invoice="${i.id}">👁️ צפייה</button>` : ""}
+        ${i.hasFile ? `<button class="mini-btn wa" data-share-invoice="${i.id}">📤 שליחה</button>` : ""}
         <button class="mini-btn" data-edit-invoice="${i.id}">✏️ עריכה</button>
       </div>
     </div>`;
@@ -1768,12 +1793,15 @@ $("btnSaveInvoice").onclick = async () => {
   });
   try{
     if (pendingFile){
-      await filePut(id, { blob: pendingFile, name: pendingFile.name, type: pendingFile.type });
+      await storeFile(id, pendingFile, pendingFile.name);
+      // קובץ חדש — החותמת הקודמת כבר לא תקפה
+      if (inv.stamped){ removeFile(id + "_s"); delete inv.stamped; }
       Object.assign(inv, { hasFile: true, fileName: pendingFile.name, fileType: pendingFile.type });
     } else if (pendingFileRemoved){
-      await fileDel(id); Object.assign(inv, { hasFile: false, fileName: "", fileType: "" });
+      await removeFile(id); if (inv.stamped){ removeFile(id + "_s"); delete inv.stamped; }
+      Object.assign(inv, { hasFile: false, fileName: "", fileType: "" });
     }
-  }catch(e){ console.error(e); toast("שמירת הקובץ במכשיר נכשלה"); }
+  }catch(e){ console.error(e); toast("שמירת הקובץ נכשלה: " + (e.message || "")); }
   const isNew = !editingInvoiceId;
   upsert("invoices", inv); closeSheet("overlayInvoice");
   toast(isNew ? "החשבונית נשמרה ✓" : "החשבונית עודכנה ✓");
@@ -1783,14 +1811,286 @@ $("btnDeleteInvoice").onclick = () => {
   closeSheet("overlayInvoice");
   removeItem("invoices", editingInvoiceId);
 };
-async function viewInvoice(id){
+/* =====================================================================
+   קבצים בענן: כל קובץ נשמר גם במכשיר (מטמון) וגם ב-Firebase Storage דרך הפונקציות.
+   אם אין רשת או שלא מחוברים — הקובץ נכנס לתור ועולה כשמתחברים. צפייה ממכשיר אחר מורידה מהענן.
+   מפתחות: {invoiceId} לקובץ המקורי, {invoiceId}_s לחשבונית החתומה.
+   ===================================================================== */
+const PENDING_UP = "tzahram_pending_uploads", PENDING_DEL = "tzahram_pending_deletes";
+const readList = k => { try{ return JSON.parse(localStorage.getItem(k)) || []; }catch(e){ return []; } };
+const writeList = (k, l) => localStorage.setItem(k, JSON.stringify([...new Set(l)]));
+function cloudReady(){ return !!(fbFunctions && cloudUser); }
+async function storeFile(key, blob, name){
+  await filePut(key, { blob, name, type: blob.type });
+  writeList(PENDING_UP, [...readList(PENDING_UP), key]);
+  writeList(PENDING_DEL, readList(PENDING_DEL).filter(k => k !== key));
+  flushFiles();
+}
+async function loadFile(key){
+  const local = await fileGet(key).catch(() => null);
+  if (local) return local;
+  if (!cloudReady()) return null;
+  const { data } = await fbFunctions.httpsCallable("getFile", { timeout: 120000 })({ key });
+  const bytes = Uint8Array.from(atob(data.data), c => c.charCodeAt(0));
+  const rec = { blob: new Blob([bytes], { type: data.mimeType }), name: data.name, type: data.mimeType };
+  filePut(key, rec).catch(() => {});
+  return rec;
+}
+async function removeFile(key){
+  await fileDel(key).catch(() => {});
+  writeList(PENDING_UP, readList(PENDING_UP).filter(k => k !== key));
+  writeList(PENDING_DEL, [...readList(PENDING_DEL), key]);
+  flushFiles();
+}
+let flushing = false;
+async function flushFiles(){
+  if (flushing || !cloudReady() || !navigator.onLine) return;
+  flushing = true;
   try{
-    const rec = await fileGet(id);
-    if (!rec){ toast("הקובץ נשמר במכשיר אחר — אפשר לצפות בו שם"); return; }
+    for (const key of readList(PENDING_UP)){
+      const rec = await fileGet(key).catch(() => null);
+      if (rec){
+        await fbFunctions.httpsCallable("uploadFile", { timeout: 180000 })({ key, data: await blobToBase64(rec.blob), mimeType: rec.type || rec.blob.type, name: rec.name || "" });
+      }
+      writeList(PENDING_UP, readList(PENDING_UP).filter(k => k !== key));
+    }
+    for (const key of readList(PENDING_DEL)){
+      await fbFunctions.httpsCallable("deleteFile")({ key });
+      writeList(PENDING_DEL, readList(PENDING_DEL).filter(k => k !== key));
+    }
+  }catch(e){
+    console.warn("file sync paused", e);
+    // שירות הקבצים עוד לא הופעל / אין רשת — ננסה שוב בהתחברות הבאה
+  }finally{ flushing = false; }
+}
+window.addEventListener("online", () => flushFiles());
+
+async function viewInvoice(id, stamped){
+  try{
+    const rec = await loadFile(stamped ? id + "_s" : id);
+    if (!rec){ toast(cloudReady() ? "הקובץ לא נמצא" : "צריך להתחבר כדי לפתוח קובץ שנשמר בענן"); return; }
     const url = URL.createObjectURL(rec.blob);
     window.open(url, "_blank", "noopener");
     setTimeout(() => URL.revokeObjectURL(url), 60000);
-  }catch(e){ console.error(e); toast("פתיחת הקובץ נכשלה"); }
+  }catch(e){ console.error(e); toast("פתיחת הקובץ נכשלה: " + (e.message || "")); }
+}
+
+/* =====================================================================
+   חותמת על חשבונית: מסגרת "חשבונית נבדקה והוזרמה · בתאריך · חתימה" + החותמת והחתימה (stamp.png).
+   ממקמים בגרירה על העמוד, והתוצאה נשמרת כ-PDF (גם כשהמקור תמונה).
+   ===================================================================== */
+const STAMP_POS_KEY = "tzahram_stamp_pos";
+const PDFJS_BASE = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
+let pdfjsPromise = null;
+function loadPdfjs(){
+  if (!pdfjsPromise){
+    pdfjsPromise = import(PDFJS_BASE + "pdf.min.mjs").then(lib => {
+      const workerUrl = PDFJS_BASE + "pdf.worker.min.mjs";
+      lib.GlobalWorkerOptions.workerSrc = workerUrl;
+      try{
+        const shim = URL.createObjectURL(new Blob([`import "${workerUrl}";`], { type: "text/javascript" }));
+        lib.GlobalWorkerOptions.workerPort = new Worker(shim, { type: "module" });
+      }catch(e){ console.warn("pdf worker fallback", e); }
+      return lib;
+    }).catch(e => { pdfjsPromise = null; throw e; });
+  }
+  return pdfjsPromise;
+}
+let stampImgPromise = null;
+function stampImage(){
+  return stampImgPromise ||= new Promise((resolve, reject) => {
+    const im = new Image(); im.onload = () => resolve(im); im.onerror = () => { stampImgPromise = null; reject(new Error("תמונת החותמת לא נטענה")); };
+    im.src = "stamp.png";
+  });
+}
+// מרכיבים את החותמת כתמונה אחת (PNG שקוף)
+async function composeStamp(dateISO){
+  await Promise.all([document.fonts.load("700 60px Heebo"), document.fonts.load("400 52px Heebo")]).catch(() => {});
+  const img = await stampImage();
+  const W = 1180, H = 360;
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d");
+  // מסגרת הטקסט מימין
+  const bx = 560, by = 22, bw = W - bx - 16, bh = H - 44;
+  ctx.strokeStyle = "#111"; ctx.lineWidth = 6; ctx.strokeRect(bx, by, bw, bh);
+  ctx.direction = "rtl"; ctx.textAlign = "right"; ctx.fillStyle = "#111";
+  const rx = bx + bw - 26;
+  ctx.font = "700 58px Heebo"; ctx.fillText("חשבונית נבדקה והוזרמה", rx, by + 86);
+  const w1 = ctx.measureText("חשבונית נבדקה והוזרמה").width;
+  ctx.fillRect(rx - w1, by + 98, w1, 4);
+  ctx.font = "700 52px Heebo"; ctx.fillText("בתאריך:", rx, by + 178);
+  const wd = ctx.measureText("בתאריך: ").width;
+  ctx.fillStyle = "#1d3a8a"; ctx.font = "500 54px Heebo"; ctx.fillText(fmtDateIL(dateISO), rx - wd, by + 178);
+  ctx.fillStyle = "#111"; ctx.font = "700 52px Heebo"; ctx.fillText("חתימה:", rx, by + 262);
+  const ws = ctx.measureText("חתימה: ").width;
+  ctx.fillRect(bx + 28, by + 270, (rx - ws) - (bx + 28), 3);
+  // החותמת והחתימה משמאל
+  const maxW = bx - 24, maxH = H - 20;
+  const sc = Math.min(maxW / img.width, maxH / img.height);
+  const iw = img.width * sc, ih = img.height * sc;
+  ctx.drawImage(img, 8, (H - ih) / 2, iw, ih);
+  return cv;
+}
+
+let stampCtx = null;   // { inv, rec, kind, pdf, pageIndex, pages, imgEl }
+function stampPos(){
+  try{ const p = JSON.parse(localStorage.getItem(STAMP_POS_KEY)); if (p && p.w) return p; }catch(e){}
+  return { x: 0.05, y: 0.62, w: 0.5 };
+}
+async function openStampSheet(id){
+  const inv = state.invoices.find(x => x.id === id); if (!inv) return;
+  let rec;
+  try{ rec = await loadFile(id); }catch(e){ toast("טעינת הקובץ נכשלה: " + (e.message || "")); return; }
+  if (!rec){ toast(cloudReady() ? "הקובץ לא נמצא" : "צריך להתחבר כדי לטעון את הקובץ מהענן"); return; }
+  const isPdf = (rec.type || rec.blob.type) === "application/pdf";
+  stampCtx = { inv, rec, kind: isPdf ? "pdf" : "image", pageIndex: 0, pages: 1 };
+  setDate("sDate", inv.stamped?.date || todayISO());
+  $("stampPageRow").style.display = "none";
+  $("stampStage").innerHTML = `<div class="empty" style="padding:30px;">טוען את החשבונית…</div>`;
+  openSheet("overlayStamp");
+  try{
+    if (isPdf){
+      const pdfjs = await loadPdfjs();
+      stampCtx.pdf = await pdfjs.getDocument({ data: new Uint8Array(await rec.blob.arrayBuffer()) }).promise;
+      stampCtx.pages = stampCtx.pdf.numPages;
+      if (stampCtx.pages > 1){
+        $("sPage").innerHTML = Array.from({ length: stampCtx.pages }, (_, i) => `<option value="${i}">עמוד ${i + 1}</option>`).join("");
+        $("stampPageRow").style.display = "";
+      }
+    }
+    await renderStampStage();
+  }catch(e){
+    console.error(e);
+    $("stampStage").innerHTML = `<div class="empty" style="padding:30px;">לא הצלחתי להציג את הקובץ: ${escapeHtml(e.message || "")}</div>`;
+  }
+}
+async function renderStampStage(){
+  const st = $("stampStage");
+  const maxW = Math.min(st.clientWidth || 340, 520);
+  const page = document.createElement("canvas");
+  if (stampCtx.kind === "pdf"){
+    const pg = await stampCtx.pdf.getPage(stampCtx.pageIndex + 1);
+    const vp1 = pg.getViewport({ scale: 1 });
+    const vp = pg.getViewport({ scale: (maxW / vp1.width) * (window.devicePixelRatio || 1) });
+    page.width = vp.width; page.height = vp.height;
+    await pg.render({ canvasContext: page.getContext("2d"), viewport: vp }).promise;
+  } else {
+    const bmp = await createImageBitmap(stampCtx.rec.blob);
+    const sc = (maxW / bmp.width) * (window.devicePixelRatio || 1);
+    page.width = Math.round(bmp.width * sc); page.height = Math.round(bmp.height * sc);
+    page.getContext("2d").drawImage(bmp, 0, 0, page.width, page.height);
+  }
+  page.className = "stamp-page";
+  const stampCv = await composeStamp(getDate("sDate") || todayISO());
+  const ov = document.createElement("img");
+  ov.className = "stamp-overlay"; ov.src = stampCv.toDataURL("image/png"); ov.alt = "חותמת";
+  ov.draggable = false;
+  st.innerHTML = ""; st.append(page, ov);
+  stampCtx.ratio = stampCv.height / stampCv.width;
+  placeOverlay(stampPos());
+  enableDrag(ov);
+}
+function placeOverlay(p){
+  const st = $("stampStage"), ov = st.querySelector(".stamp-overlay"), pg = st.querySelector(".stamp-page");
+  if (!ov || !pg) return;
+  const W = pg.clientWidth, H = pg.clientHeight;
+  const w = Math.max(0.15, Math.min(0.9, p.w));
+  const h = w * W * stampCtx.ratio / H;
+  const x = Math.max(0, Math.min(1 - w, p.x)), y = Math.max(0, Math.min(1 - h, p.y));
+  Object.assign(ov.style, { left: x * W + "px", top: y * H + "px", width: w * W + "px" });
+  stampCtx.pos = { x, y, w };
+  $("sSize").value = Math.round(w * 100);
+}
+function enableDrag(ov){
+  let start = null;
+  ov.onpointerdown = e => {
+    e.preventDefault(); ov.setPointerCapture(e.pointerId);
+    start = { x: e.clientX, y: e.clientY, pos: { ...stampCtx.pos } };
+  };
+  ov.onpointermove = e => {
+    if (!start) return;
+    const pg = $("stampStage").querySelector(".stamp-page");
+    placeOverlay({ w: start.pos.w, x: start.pos.x + (e.clientX - start.x) / pg.clientWidth, y: start.pos.y + (e.clientY - start.y) / pg.clientHeight });
+  };
+  ov.onpointerup = ov.onpointercancel = () => { start = null; };
+}
+$("sSize").addEventListener("input", () => placeOverlay({ ...stampCtx.pos, w: +$("sSize").value / 100 }));
+$("sPage").addEventListener("change", async () => { stampCtx.pageIndex = +$("sPage").value; await renderStampStage(); });
+$("sDate").addEventListener("change", async () => {
+  if (!stampCtx || !getDate("sDate")) return;
+  const ov = $("stampStage").querySelector(".stamp-overlay");
+  if (ov) ov.src = (await composeStamp(getDate("sDate"))).toDataURL("image/png");
+});
+
+// מיקום החותמת (שברים יחסית לעמוד כפי שהוא מוצג) → קואורדינטות ב-PDF, כולל עמודים מסובבים
+function stampRect(page, pos, ratio){
+  const { x: cx, y: cy, width: cw, height: ch } = page.getCropBox();
+  const rot = ((page.getRotation().angle % 360) + 360) % 360;
+  const vw = rot % 180 ? ch : cw, vh = rot % 180 ? cw : ch;
+  const left = pos.x * vw, top = pos.y * vh, sw = pos.w * vw, sh = sw * ratio;
+  const { degrees } = window.PDFLib;
+  if (rot === 90)  return { x: cx + top + sh, y: cy + left, width: sw, height: sh, rotate: degrees(90) };
+  if (rot === 180) return { x: cx + cw - left, y: cy + top + sh, width: sw, height: sh, rotate: degrees(180) };
+  if (rot === 270) return { x: cx + cw - top - sh, y: cy + ch - left, width: sw, height: sh, rotate: degrees(270) };
+  return { x: cx + left, y: cy + ch - top - sh, width: sw, height: sh };
+}
+async function buildStampedPdf(){
+  const { PDFDocument } = await loadPdfLib();
+  const { rec, kind, pageIndex, pos, ratio } = stampCtx;
+  const stampPng = await new Promise(res => composeStamp(getDate("sDate") || todayISO()).then(cv => cv.toBlob(res, "image/png")));
+  let doc, page;
+  if (kind === "pdf"){
+    doc = await PDFDocument.load(await rec.blob.arrayBuffer(), { ignoreEncryption: true });
+    page = doc.getPage(pageIndex);
+  } else {
+    doc = await PDFDocument.create();
+    let bytes = await rec.blob.arrayBuffer(), type = rec.type || rec.blob.type;
+    if (!/jpe?g|png/.test(type)){   // סוגי תמונה אחרים → JPEG
+      const bmp = await createImageBitmap(rec.blob);
+      const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
+      c.getContext("2d").drawImage(bmp, 0, 0);
+      bytes = await (await new Promise(r => c.toBlob(r, "image/jpeg", 0.9))).arrayBuffer(); type = "image/jpeg";
+    }
+    const im = /png/.test(type) ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+    const W = 595.28, H = W * im.height / im.width;
+    page = doc.addPage([W, H]);
+    page.drawImage(im, { x: 0, y: 0, width: W, height: H });
+  }
+  const st = await doc.embedPng(await stampPng.arrayBuffer());
+  page.drawImage(st, stampRect(page, pos, ratio));
+  return new Blob([await doc.save()], { type: "application/pdf" });
+}
+function stampedName(inv){ return `חשבונית ${inv.number || ""} חתומה.pdf`.replace(/\s+/g, " ").replace(" .pdf", ".pdf"); }
+$("btnSaveStamp").onclick = async () => {
+  if (!stampCtx?.pos){ toast("החשבונית עוד לא נטענה"); return; }
+  if (!getDate("sDate")){ $("sDate").closest(".field").classList.add("invalid"); toast("תאריך לא תקין — DD/MM/YYYY"); return; }
+  const btn = $("btnSaveStamp"); btn.classList.add("busy");
+  try{
+    const blob = await buildStampedPdf();
+    const inv = stampCtx.inv;
+    await storeFile(inv.id + "_s", blob, stampedName(inv));
+    localStorage.setItem(STAMP_POS_KEY, JSON.stringify(stampCtx.pos));
+    upsert("invoices", Object.assign({}, state.invoices.find(x => x.id === inv.id) || inv, { stamped: { date: getDate("sDate"), name: stampedName(inv) } }));
+    closeSheet("overlayStamp");
+    toast("החשבונית נחתמה ✓");
+    openInvoiceShare(inv.id);
+  }catch(e){ console.error(e); toast("החתימה נכשלה: " + (e.message || "")); }
+  finally{ btn.classList.remove("busy"); }
+};
+function invoiceMessage(inv){
+  return `מצורפת חשבונית ${inv.number || ""}${companyById(inv.companyId) ? ` של ${companyById(inv.companyId).name}` : ""} — נבדקה והוזרמה${inv.stamped ? ` בתאריך ${fmtDateIL(inv.stamped.date)}` : ""}.`;
+}
+async function openInvoiceShare(id){
+  const inv = state.invoices.find(x => x.id === id); if (!inv) return;
+  const key = inv.stamped ? id + "_s" : id;
+  const blobP = loadFile(key).then(r => { if (!r) throw new Error("הקובץ לא נמצא"); return r.blob; });
+  const name = inv.stamped ? (inv.stamped.name || stampedName(inv)) : (inv.fileName || "חשבונית.pdf");
+  openFileShareSheet({
+    title: inv.stamped ? "שליחת החשבונית החתומה" : "שליחת החשבונית",
+    fileName: name, mime: inv.stamped ? "application/pdf" : (inv.fileType || "application/pdf"),
+    blobP, message: invoiceMessage(inv), subject: `חשבונית ${inv.number || ""}`.trim(),
+    company: companyById(inv.companyId) || {},
+  });
 }
 
 /* ---------- events ---------- */
@@ -1815,6 +2115,9 @@ $("view").addEventListener("click", e => {
   const row = e.target.closest("[data-row-order]"); if (row) return openOrderForm(row.dataset.rowOrder);
   const ei = e.target.closest("[data-edit-invoice]"); if (ei) return openInvoiceForm(ei.dataset.editInvoice);
   const vi = e.target.closest("[data-view-invoice]"); if (vi) return viewInvoice(vi.dataset.viewInvoice);
+  const vs = e.target.closest("[data-view-stamped]"); if (vs) return viewInvoice(vs.dataset.viewStamped, true);
+  const si = e.target.closest("[data-stamp-invoice]"); if (si) return openStampSheet(si.dataset.stampInvoice);
+  const sh = e.target.closest("[data-share-invoice]"); if (sh) return openInvoiceShare(sh.dataset.shareInvoice);
   const nb = e.target.closest("[data-new-order-for]"); if (nb) return openOrderForm(null, { companyId: nb.dataset.newOrderFor });
 });
 $("searchInput").addEventListener("input", e => { search = e.target.value.trim(); render(); });
@@ -1887,6 +2190,7 @@ function initFirebase(){
         await resolveSyncTarget(user);
         if (cloudUser !== user) return;   // התנתק או החליף חשבון בינתיים
         startListener();
+        flushFiles();
       } else {
         docRef = null; lastRemoteJson = null; sharedFrom = null; shareMembers = [];
         setSyncStatus("", "לא מחובר · לחצו להתחברות לסנכרון");
