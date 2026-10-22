@@ -55,13 +55,17 @@ Rules:
 - vat: the VAT amount (מע"מ), a number, or null.
 - total: the final total to pay including VAT (סה"כ לתשלום / סה"כ כולל מע"מ), a number. Ignore line subtotals.
 - orderNumber: a customer purchase / work order number the invoice refers to (מס' הזמנה / הזמנת עבודה / הזמנת רכש / 1007 / PO), only if printed, else null.
-- tzadi: a military vehicle number (מס' צ' / צ.) if printed, digits only, else null.
+- tzadi: the vehicle's number, digits only. On military paperwork it is "מס' צ'" / "צ."; on a civilian garage invoice for a military customer the same number is usually printed as "מספר רישוי" / "מס' רישוי" / "רישוי" — use that. Not the chassis / VIN (מס' מכשיר / שלדה), not a customer number. null if absent.
+- vehicle: a short description of the vehicle as printed (for example "טרקטור Landini 7-175"), or null.
+- engineHours: engine hours (שעות מנוע) as printed, digits only, or null. Ignore 0.
+- allocationNumber: the Israel Tax Authority allocation number (מספר הקצאה / מס' הקצאה), digits only, or null.
+- Ignore handwritten marks, "נאמן למקור" / "העתק" stamps, bank details, and any existing approval stamp or signature.
 - description: one short Hebrew line describing the work or parts (for example "החלפת צמיג ותיקון נזילה במלגזה"), or null.
 - Use null for anything not on the document. Never invent numbers.
 - confidence: 0 to 1 per field, honest. Use below 0.7 when the text is blurry, cut off, handwritten or ambiguous.`;
 
 const SCAN_FIELDS = ["supplierName", "supplierTaxId", "documentType", "invoiceNumber", "date",
-  "amountBeforeVat", "vat", "total", "orderNumber", "tzadi", "description"];
+  "amountBeforeVat", "vat", "total", "orderNumber", "tzadi", "vehicle", "engineHours", "allocationNumber", "description"];
 const CONF_FIELDS = ["supplierName", "supplierTaxId", "invoiceNumber", "date", "total", "orderNumber"];
 
 const SCAN_SCHEMA = {
@@ -77,6 +81,9 @@ const SCAN_SCHEMA = {
     total: { type: Type.NUMBER, nullable: true },
     orderNumber: { type: Type.STRING, nullable: true },
     tzadi: { type: Type.STRING, nullable: true },
+    vehicle: { type: Type.STRING, nullable: true },
+    engineHours: { type: Type.STRING, nullable: true },
+    allocationNumber: { type: Type.STRING, nullable: true },
     description: { type: Type.STRING, nullable: true },
     confidence: {
       type: Type.OBJECT,
@@ -178,6 +185,9 @@ export const scanInvoice = onCall({ secrets: [GEMINI_API_KEY], timeoutSeconds: 3
     total,
     orderNumber: cleanStr(r.orderNumber, 30),
     tzadi: digits(r.tzadi, 12),
+    vehicle: cleanStr(r.vehicle, 60),
+    engineHours: digits(r.engineHours, 8) === "0" ? null : digits(r.engineHours, 8),
+    allocationNumber: digits(r.allocationNumber, 20),
     description: cleanStr(r.description, 160),
     confidence: r.confidence && typeof r.confidence === "object" ? r.confidence : {}
   };

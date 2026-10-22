@@ -240,7 +240,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 10:45</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 10:50</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -348,7 +348,10 @@
       <div class="field"><label for="iDocType">סוג מסמך</label><input id="iDocType" list="dlDocType"></div>
       <div class="field"><label for="iNumber">מס' חשבונית</label><input id="iNumber" class="ltr" inputmode="numeric"></div>
     </div>
-    <div class="field"><label for="iDate">תאריך החשבונית</label><input id="iDate" type="date"></div>
+    <div class="grid2">
+      <div class="field"><label for="iDate">תאריך החשבונית</label><input id="iDate" type="date"></div>
+      <div class="field"><label for="iAlloc">מספר הקצאה</label><input id="iAlloc" class="ltr" inputmode="numeric"></div>
+    </div>
     <div class="grid3">
       <div class="field"><label for="iBeforeVat">לפני מע"מ</label><input id="iBeforeVat" type="number" inputmode="decimal" step="0.01" min="0"></div>
       <div class="field"><label for="iVat">מע"מ</label><input id="iVat" type="number" inputmode="decimal" step="0.01" min="0"></div>
@@ -1090,6 +1093,7 @@ function openInvoiceForm(id){
   $("iDocType").value = i?.docType || "חשבונית מס";
   $("iNumber").value = i?.number || "";
   $("iDate").value = i?.date || todayISO();
+  $("iAlloc").value = i?.allocationNumber || "";
   $("iBeforeVat").value = i?.beforeVat || "";
   $("iVat").value = i?.vat || "";
   $("iTotal").value = i?.total || "";
@@ -1190,7 +1194,8 @@ function applyScan(r){
   const conf = r.confidence || {}, low = k => typeof conf[k] === "number" && conf[k] < 0.7;
   const set = (id, v) => { if (v != null && v !== "") $(id).value = v; };
   set("iDocType", r.documentType); set("iNumber", r.invoiceNumber); set("iDate", r.date);
-  set("iBeforeVat", r.amountBeforeVat); set("iVat", r.vat); set("iTotal", r.total); set("iDesc", r.description);
+  set("iBeforeVat", r.amountBeforeVat); set("iVat", r.vat); set("iTotal", r.total); set("iAlloc", r.allocationNumber);
+  set("iDesc", [r.description, r.vehicle && !String(r.description || "").includes(r.vehicle) ? r.vehicle : ""].filter(Boolean).join(" · "));
   const c = matchCompany(r.supplierName, r.supplierTaxId);
   if (c){ $("iCompany").value = c.id; $("newCompanyHint").innerHTML = ""; }
   else if (r.supplierName){
@@ -1222,6 +1227,7 @@ $("btnSaveInvoice").onclick = async () => {
     docType: $("iDocType").value.trim(),
     number: $("iNumber").value.trim(),
     date: $("iDate").value || todayISO(),
+    allocationNumber: $("iAlloc").value.trim(),
     beforeVat: parseFloat($("iBeforeVat").value) || 0,
     vat: parseFloat($("iVat").value) || 0,
     total,
