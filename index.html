@@ -268,7 +268,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 11:15</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 11:25</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -289,7 +289,7 @@
       <div class="field"><label for="bOrderNo">מספר הזמנה</label><input id="bOrderNo" class="ltr" inputmode="numeric" placeholder="4441511529"></div>
       <div class="field"><label for="bReq">מס' דרישה</label><input id="bReq" class="ltr" inputmode="numeric"></div>
     </div>
-    <div class="field"><label for="bAmount">סכום ההזמנה (₪)</label><input id="bAmount" type="number" inputmode="decimal" step="0.01" min="0"></div>
+    <div class="field"><label for="bAmount">סכום ההזמנה</label><input id="bAmount" class="ltr money" inputmode="decimal" autocomplete="off"></div>
     <div class="grid2">
       <div class="field"><label for="bOpen">ת.פ (תאריך פתיחה)</label><input id="bOpen" type="date"></div>
       <div class="field"><label for="bValid">תוקף ההזמנה</label><input id="bValid" type="date"></div>
@@ -353,14 +353,14 @@
     </div>
     <div class="grid2">
       <div class="field"><label for="oUnit">יחידה</label><input id="oUnit" list="dlUnit"></div>
-      <div class="field"><label for="oHours">שעות מנוע</label><input id="oHours" class="ltr" inputmode="numeric"></div>
+      <div class="field"><label for="oHours">שעות מנוע</label><input id="oHours" class="ltr int" inputmode="numeric" autocomplete="off"></div>
     </div>
     <div class="field"><label for="oRepairs">אבקש לבצע את התיקונים הבאים (תאור התיקון)</label><textarea id="oRepairs" rows="3"></textarea></div>
     <div class="field"><label for="oDetails">התיקון יבוצע</label><textarea id="oDetails" rows="3"></textarea></div>
     <div class="field-group-title">מחיר (לא מודפס בטופס)</div>
     <div class="grid2">
-      <div class="field"><label for="oPriceBefore">מחיר לפני מע"מ</label><input id="oPriceBefore" type="number" inputmode="decimal" step="0.01" min="0"></div>
-      <div class="field"><label for="oPriceTotal">מחיר כולל מע"מ</label><input id="oPriceTotal" type="number" inputmode="decimal" step="0.01" min="0"></div>
+      <div class="field"><label for="oPriceBefore">מחיר לפני מע"מ</label><input id="oPriceBefore" class="ltr money" inputmode="decimal" autocomplete="off"></div>
+      <div class="field"><label for="oPriceTotal">מחיר כולל מע"מ</label><input id="oPriceTotal" class="ltr money" inputmode="decimal" autocomplete="off"></div>
     </div>
     <div class="hint" id="oPriceHint" style="margin:-6px 0 14px;"></div>
     <div class="sheet-actions">
@@ -396,9 +396,9 @@
       <div class="field"><label for="iAlloc">מספר הקצאה</label><input id="iAlloc" class="ltr" inputmode="numeric"></div>
     </div>
     <div class="grid3">
-      <div class="field"><label for="iBeforeVat">לפני מע"מ</label><input id="iBeforeVat" type="number" inputmode="decimal" step="0.01" min="0"></div>
-      <div class="field"><label for="iVat">מע"מ</label><input id="iVat" type="number" inputmode="decimal" step="0.01" min="0"></div>
-      <div class="field"><label for="iTotal">סה"כ לתשלום</label><input id="iTotal" type="number" inputmode="decimal" step="0.01" min="0"></div>
+      <div class="field"><label for="iBeforeVat">לפני מע"מ</label><input id="iBeforeVat" class="ltr money" inputmode="decimal" autocomplete="off"></div>
+      <div class="field"><label for="iVat">מע"מ</label><input id="iVat" class="ltr money" inputmode="decimal" autocomplete="off"></div>
+      <div class="field"><label for="iTotal">סה"כ לתשלום</label><input id="iTotal" class="ltr money" inputmode="decimal" autocomplete="off"></div>
     </div>
     <div class="field"><label for="iBudget">סעיף תקציב</label><select id="iBudget"></select></div>
     <div class="field"><label for="iDesc">פירוט</label><textarea id="iDesc" rows="2"></textarea></div>
@@ -493,6 +493,37 @@ function fmtMoney(n){
   return "₪" + v.toLocaleString("he-IL", { minimumFractionDigits: frac, maximumFractionDigits: 2 });
 }
 function $(id){ return document.getElementById(id); }
+/* שדות סכום (class="money") ושעות מנוע (class="int"): מוצגים עם פסיק באלפים (וסימן ₪ בסכומים).
+   בזמן הקלדה השדה מציג מספר נקי, וביציאה מהשדה הוא מתעצב. */
+function fmtInt(v){
+  const n = parseInt(String(v ?? "").replace(/[^\d]/g, ""), 10);
+  return isNaN(n) ? (v ?? "") : n.toLocaleString("en-US");
+}
+function fmtFieldValue(n, kind){
+  if (n == null || n === "" || isNaN(n)) return "";
+  if (kind === "int") return Math.round(n).toLocaleString("en-US");
+  const frac = Math.round(n * 100) % 100 !== 0 ? 2 : 0;
+  return "₪ " + Number(n).toLocaleString("en-US", { minimumFractionDigits: frac, maximumFractionDigits: 2 });
+}
+function numOf(id){
+  const raw = String($(id).value || "").replace(/[^\d.\-]/g, "");
+  if (raw === "" || raw === "-" || raw === ".") return null;
+  const n = parseFloat(raw);
+  return isNaN(n) ? null : n;
+}
+function setNum(id, v){
+  const el = $(id);
+  const n = v == null || v === "" ? null : parseFloat(String(v).replace(/[^\d.\-]/g, ""));
+  el.value = document.activeElement === el ? (n ?? "") : fmtFieldValue(n, el.classList.contains("int") ? "int" : "money");
+}
+document.addEventListener("focusin", e => {
+  const el = e.target;
+  if (el.matches?.("input.money, input.int")){ const n = numOf(el.id); el.value = n == null ? "" : String(n); }
+});
+document.addEventListener("focusout", e => {
+  const el = e.target;
+  if (el.matches?.("input.money, input.int")) el.value = fmtFieldValue(numOf(el.id), el.classList.contains("int") ? "int" : "money");
+});
 function toast(msg){
   const t = $("toast");
   t.className = "toast show"; t.textContent = msg;
@@ -743,7 +774,7 @@ function renderLineDetail(l){
           <td>${escapeHtml(r.o.unit || "")}</td>
           <td>${escapeHtml(fmtDateIL(r.o.date))}</td>
           <td>${escapeHtml(fmtDateIL(r.o.endDate))}</td>
-          <td>${escapeHtml(r.o.hours || "")}</td>
+          <td>${escapeHtml(fmtInt(r.o.hours))}</td>
           ${r.prices ? `<td class="${l.vatMode === "before" ? "" : "muted"}">${fmtMoney(r.prices.before)}</td><td class="${l.vatMode === "before" ? "muted" : ""}">${fmtMoney(r.prices.total)}</td>` : `<td colspan="2"><span class="pill-open">פתוחה</span></td>`}
           <td class="${r.balance < 0 ? "" : "muted"}" style="${r.balance < 0 ? "color:var(--danger);font-weight:800" : ""}">${fmtMoney(r.balance)}</td>
           <td class="ltr">${r.inv ? escapeHtml(r.inv.number || "✓") : ""}</td>
@@ -771,6 +802,14 @@ function exportLine(id){
       r.prices ? r.prices.before : "", r.prices ? r.prices.total : "", r.balance, r.inv?.number || "", r.o.repairs || ""]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // פסיק באלפים: שע"מ במספר שלם, סכומים עם ₪
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+  for (let R = 2; R <= range.e.r; R++){
+    for (const [C, z] of [[6, "#,##0"], [7, '"₪" #,##0.00'], [8, '"₪" #,##0.00'], [9, '"₪" #,##0.00']]){
+      const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+      if (cell && cell.t === "n") cell.z = z;
+    }
+  }
   ws["!cols"] = [6, 11, 16, 10, 10, 10, 8, 13, 13, 12, 15, 40].map(w => ({ wch: w }));
   ws["!merges"] = [{ s: { r: 0, c: 1 }, e: { r: 0, c: 11 } }];
   const wb = XLSX.utils.book_new();
@@ -842,7 +881,7 @@ function openBudgetForm(id){
   $("bCompany").value = l?.companyId || "";
   $("bOrderNo").value = l?.orderNumber || "";
   $("bReq").value = l?.requisition || "";
-  $("bAmount").value = l ? (l.amount ?? "") : "";
+  setNum("bAmount", l ? l.amount : null);
   $("bOpen").value = l?.openDate || "";
   $("bValid").value = l?.validUntil || "";
   $("bVat").value = l?.vatMode || "total";
@@ -863,7 +902,7 @@ $("btnSaveBudget").onclick = () => {
     companyId,
     orderNumber: $("bOrderNo").value.trim(),
     requisition: $("bReq").value.trim(),
-    amount: parseFloat($("bAmount").value) || 0,
+    amount: numOf("bAmount") || 0,
     openDate: $("bOpen").value,
     validUntil: $("bValid").value,
     vatMode: $("bVat").value,
@@ -979,7 +1018,7 @@ function renderOrders(){
     const c = companyById(o.companyId), b = budgetById(o.budgetLineId);
     const kv = [
       o.tzadi && ["צ'", `<span dir="ltr">${escapeHtml(o.tzadi)}</span>`],
-      (o.vehicle || o.hours) && ["כלי", escapeHtml([o.vehicle, o.hours ? `${o.hours} ש"מ` : ""].filter(Boolean).join(" · "))],
+      (o.vehicle || o.hours) && ["כלי", escapeHtml([o.vehicle, o.hours ? `${fmtInt(o.hours)} ש"מ` : ""].filter(Boolean).join(" · "))],
       o.unit && ["יחידה", escapeHtml(o.unit)],
       o.repairs && ["תיקונים", escapeHtml(o.repairs).replace(/\n/g, "<br>")],
       invoiceForOrder(o.id) && ["חשבונית", `🧾 ${escapeHtml(invoiceForOrder(o.id).number || "")} · ${fmtMoney(invoiceForOrder(o.id).total)}`],
@@ -1035,15 +1074,15 @@ function openOrderForm(id, preset){
   $("oSerial").value = o ? (o.serial || "") : nextSerial(lineId);
   $("oTzadi").value = o?.tzadi || "";
   $("oVehicle").value = o?.vehicle || "";
-  $("oHours").value = o?.hours || "";
+  setNum("oHours", o?.hours);
   $("oHours").placeholder = "";
   $("oUnit").value = o?.unit || "";
   $("oRepairs").value = o?.repairs || "";
   $("oDetails").value = o?.details || "";
   const inv = o && invoiceForOrder(o.id);
   const pr = o ? orderPrices(o) : null;
-  $("oPriceBefore").value = pr ? pr.before : "";
-  $("oPriceTotal").value = pr ? pr.total : "";
+  setNum("oPriceBefore", pr ? pr.before : null);
+  setNum("oPriceTotal", pr ? pr.total : null);
   $("oPriceBefore").disabled = $("oPriceTotal").disabled = !!inv;
   $("oPriceHint").textContent = inv
     ? `לפי חשבונית ${inv.number || ""}. לשינוי — עורכים את החשבונית.`
@@ -1053,8 +1092,8 @@ function openOrderForm(id, preset){
   openSheet("overlayOrder");
 }
 // מחיר: הקלדה באחד מהשדות מחשבת את השני לפי שיעור המע"מ
-$("oPriceBefore").addEventListener("input", () => { const v = parseFloat($("oPriceBefore").value); $("oPriceTotal").value = v >= 0 ? round2(v * (1 + VAT_RATE)) : ""; });
-$("oPriceTotal").addEventListener("input", () => { const v = parseFloat($("oPriceTotal").value); $("oPriceBefore").value = v >= 0 ? round2(v / (1 + VAT_RATE)) : ""; });
+$("oPriceBefore").addEventListener("input", () => { const v = numOf("oPriceBefore"); setNum("oPriceTotal", v >= 0 ? round2(v * (1 + VAT_RATE)) : null); });
+$("oPriceTotal").addEventListener("input", () => { const v = numOf("oPriceTotal"); setNum("oPriceBefore", v >= 0 ? round2(v / (1 + VAT_RATE)) : null); });
 // בחירת סעיף ממלאת את החברה, את מספר ההזמנה ואת הסודר הבא בסעיף
 $("oBudget").addEventListener("change", () => {
   const line = budgetById($("oBudget").value); if (!line) return;
@@ -1070,7 +1109,7 @@ $("oTzadi").addEventListener("change", () => {
   if (!prev) return;
   if (!$("oVehicle").value) $("oVehicle").value = prev.vehicle || "";
   if (!$("oUnit").value) $("oUnit").value = prev.unit || "";
-  if (prev.hours) $("oHours").placeholder = `קודם: ${prev.hours}`;
+  if (prev.hours) $("oHours").placeholder = `קודם: ${fmtInt(prev.hours)}`;
 });
 function showOrdersTab(o){
   // שורה שנוספה מתוך לשונית התקציב — נשארים בתקציב ופותחים את הסעיף שלה
@@ -1092,13 +1131,13 @@ function collectOrder(){
     serial: $("oSerial").value.trim(),
     tzadi: $("oTzadi").value.trim(),
     vehicle: $("oVehicle").value.trim(),
-    hours: $("oHours").value.trim(),
+    hours: numOf("oHours") == null ? "" : String(Math.round(numOf("oHours"))),
     unit: $("oUnit").value.trim(),
     repairs: $("oRepairs").value.trim(),
     details: $("oDetails").value.trim(),
     budgetLineId: $("oBudget").value,
-    priceBefore: $("oPriceBefore").value === "" ? null : (parseFloat($("oPriceBefore").value) || 0),
-    priceTotal: $("oPriceTotal").value === "" ? null : (parseFloat($("oPriceTotal").value) || 0),
+    priceBefore: numOf("oPriceBefore"),
+    priceTotal: numOf("oPriceTotal"),
     price: null,
   });
 }
@@ -1134,7 +1173,7 @@ function fieldsFor(o){
     "[מס' סודר]": o.serial,
     "[מס' צ']": o.tzadi,
     "[סוג הכלי]": o.vehicle,
-    "[שעות מנוע]": o.hours,
+    "[שעות מנוע]": o.hours ? fmtInt(o.hours) : "",
     "[יחידה]": o.unit,
     "[שדה תיקונים]": o.repairs,
     "[פירוט התיקון]": o.details,
@@ -1355,9 +1394,9 @@ function openInvoiceForm(id){
   $("iNumber").value = i?.number || "";
   $("iDate").value = i?.date || todayISO();
   $("iAlloc").value = i?.allocationNumber || "";
-  $("iBeforeVat").value = i?.beforeVat || "";
-  $("iVat").value = i?.vat || "";
-  $("iTotal").value = i?.total || "";
+  setNum("iBeforeVat", i?.beforeVat || null);
+  setNum("iVat", i?.vat || null);
+  setNum("iTotal", i?.total || null);
   $("iBudget").value = i?.budgetLineId || "";
   $("iDesc").value = i?.description || "";
   $("newCompanyHint").innerHTML = "";
@@ -1373,8 +1412,8 @@ $("iOrder").addEventListener("change", () => {
 });
 // מע"מ: אם יש שני סכומים מתוך שלושה, משלימים את השלישי.
 ["iBeforeVat", "iVat"].forEach(id => $(id).addEventListener("change", () => {
-  const a = parseFloat($("iBeforeVat").value), v = parseFloat($("iVat").value);
-  if (a > 0 && v >= 0 && !$("iTotal").value) $("iTotal").value = Math.round((a + v) * 100) / 100;
+  const a = numOf("iBeforeVat"), v = numOf("iVat");
+  if (a > 0 && v >= 0 && numOf("iTotal") == null) setNum("iTotal", round2(a + v));
 }));
 
 /* ---------- קובץ ---------- */
@@ -1455,7 +1494,9 @@ function applyScan(r){
   const conf = r.confidence || {}, low = k => typeof conf[k] === "number" && conf[k] < 0.7;
   const set = (id, v) => { if (v != null && v !== "") $(id).value = v; };
   set("iDocType", r.documentType); set("iNumber", r.invoiceNumber); set("iDate", r.date);
-  set("iBeforeVat", r.amountBeforeVat); set("iVat", r.vat); set("iTotal", r.total); set("iAlloc", r.allocationNumber);
+  if (r.amountBeforeVat != null) setNum("iBeforeVat", r.amountBeforeVat);
+  if (r.vat != null) setNum("iVat", r.vat);
+  if (r.total != null) setNum("iTotal", r.total); set("iAlloc", r.allocationNumber);
   set("iDesc", [r.description, r.vehicle && !String(r.description || "").includes(r.vehicle) ? r.vehicle : ""].filter(Boolean).join(" · "));
   const c = matchCompany(r.supplierName, r.supplierTaxId);
   if (c){ $("iCompany").value = c.id; $("newCompanyHint").innerHTML = ""; }
@@ -1477,7 +1518,7 @@ function applyScan(r){
 }
 
 $("btnSaveInvoice").onclick = async () => {
-  const total = parseFloat($("iTotal").value);
+  const total = numOf("iTotal");
   if (!(total > 0)){ $("iTotal").closest(".field").classList.add("invalid"); toast("צריך סכום לתשלום"); return; }
   const old = state.invoices.find(x => x.id === editingInvoiceId) || {};
   const id = editingInvoiceId || uid();
@@ -1489,8 +1530,8 @@ $("btnSaveInvoice").onclick = async () => {
     number: $("iNumber").value.trim(),
     date: $("iDate").value || todayISO(),
     allocationNumber: $("iAlloc").value.trim(),
-    beforeVat: parseFloat($("iBeforeVat").value) || 0,
-    vat: parseFloat($("iVat").value) || 0,
+    beforeVat: numOf("iBeforeVat") || 0,
+    vat: numOf("iVat") || 0,
     total,
     budgetLineId: $("iBudget").value,
     description: $("iDesc").value.trim(),
