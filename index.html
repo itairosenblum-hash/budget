@@ -287,7 +287,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 12:45</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 12:55</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -619,7 +619,7 @@ function showUndo(msg, onUndo){
   t.className = "toast show undo-toast";
   t.innerHTML = `<span>${escapeHtml(msg)}</span><button type="button">ביטול</button>`;
   t.querySelector("button").onclick = () => { onUndo(); t.className = "toast"; };
-  clearTimeout(toast._t); toast._t = setTimeout(() => t.className = "toast", 5000);
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.className = "toast", 7000);
 }
 /* מספר ישראלי (050-1234567 / +972…) → 972501234567 לקישור wa.me */
 function waNumber(raw){
@@ -673,21 +673,52 @@ function upsert(listName, item){
   if (i >= 0) list[i] = item; else list.push(item);
   saveState(); render();
 }
-function removeItem(listName, id){
-  const list = state[listName];
-  const i = list.findIndex(x => x.id === id);
-  if (i < 0) return;
-  const [removed] = list.splice(i, 1);
-  // הקובץ המקומי של חשבונית נמחק רק אם המחיקה לא בוטלה תוך כמה שניות.
-  if (listName === "invoices" && removed.hasFile) setTimeout(() => { if (!state.invoices.some(x => x.id === id)){ removeFile(id); removeFile(id + "_s"); } }, 8000);
-  state.tomb[id] = now();
+function removeItem(listName, id, msg){ removeItems([[listName, id]], msg); }
+// מחיקה של כמה פריטים יחד (למשל 1007 + החשבונית שלה) עם "ביטול" אחד
+function removeItems(pairs, msg = "נמחק"){
+  const removed = [];
+  for (const [listName, id] of pairs){
+    const list = state[listName];
+    const i = list.findIndex(x => x.id === id);
+    if (i < 0) continue;
+    const [item] = list.splice(i, 1);
+    removed.push([listName, item]);
+    state.tomb[id] = now();
+    // קבצי חשבונית נמחקים (מהמכשיר ומהענן) רק אם המחיקה לא בוטלה תוך כמה שניות
+    if (listName === "invoices" && item.hasFile) setTimeout(() => { if (!state.invoices.some(x => x.id === id)){ removeFile(id); removeFile(id + "_s"); } }, 8000);
+  }
+  if (!removed.length) return;
   saveState(); render();
-  showUndo("נמחק", () => {
-    delete state.tomb[id];
-    removed._u = now();
-    state[listName].push(removed);
+  showUndo(msg, () => {
+    for (const [listName, item] of removed){
+      delete state.tomb[item.id];
+      item._u = now();
+      state[listName].push(item);
+    }
     saveState(); render();
   });
+}
+function deleteOrder(id){
+  const o = orderById(id); if (!o) return;
+  const inv = invoiceForOrder(id);
+  const label = `הזמנה ${o.number || ""}${o.serial ? ` סודר ${o.serial}` : ""}`.trim();
+  if (inv){
+    const both = confirm(`ל-${label} מקושרת חשבונית ${inv.number || ""}.\n\nאישור — למחוק גם את החשבונית.\nביטול — למחוק רק את ה-1007 (החשבונית תישאר, משויכת לאותו סעיף).`);
+    if (both){ removeItems([["orders", id], ["invoices", inv.id]], "ה-1007 והחשבונית נמחקו"); return; }
+    if (!confirm(`למחוק את ${label}?`)) return;
+    // החשבונית נשארת ונספרת באותו סעיף גם בלי ההזמנה
+    upsert("invoices", Object.assign({}, inv, { orderId: "", budgetLineId: inv.budgetLineId || o.budgetLineId || "" }));
+    removeItems([["orders", id]], "ה-1007 נמחקה");
+    return;
+  }
+  if (!confirm(`למחוק את ${label}?${orderReserved(o) ? `\nהשריון של ${fmtMoney(orderReserved(o))} ישתחרר.` : ""}`)) return;
+  removeItems([["orders", id]], "ה-1007 נמחקה");
+}
+function deleteInvoice(id){
+  const inv = state.invoices.find(x => x.id === id); if (!inv) return;
+  const o = orderById(inv.orderId);
+  if (!confirm(`למחוק את חשבונית ${inv.number || ""}${inv.hasFile ? " (כולל הקובץ והגרסה החתומה)" : ""}?${o ? `\nהזמנה ${o.number || ""} תחזור להיות משוריינת.` : ""}`)) return;
+  removeItems([["invoices", id]], "החשבונית נמחקה");
 }
 
 /* מיזוג שני מצבים: לכל id נבחרת הגרסה עם _u הגבוה, ומחיקות (tomb) גוברות על גרסאות ישנות מהן. */
@@ -1130,6 +1161,7 @@ function renderOrders(){
         <button class="mini-btn wa" data-send-order="${o.id}">📤 שליחה</button>
         ${invoiceForOrder(o.id) ? `<button class="mini-btn" data-edit-invoice="${invoiceForOrder(o.id).id}">🧾 החשבונית</button>` : `<button class="mini-btn" data-inv-for-order="${o.id}">🧾 העלאת חשבונית</button>`}
         <button class="mini-btn" data-edit-order="${o.id}">✏️ עריכה</button>
+        <button class="mini-btn danger" data-del-order="${o.id}" aria-label="מחיקת ה-1007">🗑️ מחיקה</button>
       </div>
     </div>`;
   }).join("") + `</div>`;
@@ -1267,7 +1299,7 @@ $("btnSaveAndIssue").onclick = () => {
 $("btnDeleteOrder").onclick = () => {
   if (!editingOrderId) return;
   closeSheet("overlayOrder");
-  removeItem("orders", editingOrderId);
+  deleteOrder(editingOrderId);
 };
 
 /* ---------- הפקת הקובץ ---------- */
@@ -1672,6 +1704,7 @@ function renderInvoices(){
         ${i.hasFile ? `<button class="mini-btn wa" data-share-invoice="${i.id}">📤 שליחה</button>` : ""}
         ${!i.hasFile && !i.stamped ? `<button class="mini-btn pri" data-mark-checked="${i.id}">✅ סימון כנבדקה והוזרמה</button>` : ""}
         <button class="mini-btn" data-edit-invoice="${i.id}">✏️ עריכה</button>
+        <button class="mini-btn danger" data-del-invoice="${i.id}" aria-label="מחיקת החשבונית">🗑️ מחיקה</button>
       </div>
     </div>`;
   }).join("") + `</div>`;
@@ -1894,7 +1927,7 @@ $("btnSaveInvoice").onclick = async () => {
 $("btnDeleteInvoice").onclick = () => {
   if (!editingInvoiceId) return;
   closeSheet("overlayInvoice");
-  removeItem("invoices", editingInvoiceId);
+  deleteInvoice(editingInvoiceId);
 };
 /* =====================================================================
    קבצים בענן: כל קובץ נשמר גם במכשיר (מטמון) וגם ב-Firebase Storage דרך הפונקציות.
@@ -2281,6 +2314,8 @@ $("view").addEventListener("click", e => {
   const vs = e.target.closest("[data-view-stamped]"); if (vs) return viewInvoice(vs.dataset.viewStamped, true);
   const si = e.target.closest("[data-stamp-invoice]"); if (si) return openStampSheet(si.dataset.stampInvoice);
   const sh = e.target.closest("[data-share-invoice]"); if (sh) return openInvoiceShare(sh.dataset.shareInvoice);
+  const dO = e.target.closest("[data-del-order]"); if (dO) return deleteOrder(dO.dataset.delOrder);
+  const dI = e.target.closest("[data-del-invoice]"); if (dI) return deleteInvoice(dI.dataset.delInvoice);
   const ifo = e.target.closest("[data-inv-for-order]"); if (ifo) return openInvoiceForm(null, { orderId: ifo.dataset.invForOrder });
   const mc = e.target.closest("[data-mark-checked]"); if (mc) return markChecked(mc.dataset.markChecked);
   const nb = e.target.closest("[data-new-order-for]"); if (nb) return openOrderForm(null, { companyId: nb.dataset.newOrderFor });
