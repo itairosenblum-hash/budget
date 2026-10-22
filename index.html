@@ -327,7 +327,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 17:10</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 17:20</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -2196,7 +2196,10 @@ let flushPromise = null;
 function flushFiles(onProgress){
   if (!cloudReady() || !navigator.onLine) return Promise.resolve(false);
   if (flushPromise) return flushPromise.then(() => flushFiles(onProgress));
-  flushPromise = (async () => {
+  // חשוב: מסמנים "עסוק" לפני שהעבודה מתחילה, ומשחררים רק את אותה הבטחה. אחרת, כשאין מה להעלות,
+  // הפונקציה מסתיימת מיד, הסימון נשאר תקוע לתמיד, וכל העלאה הבאה מחכה לעצמה בלולאה אינסופית (קריסת זיכרון).
+  const run = (async () => {
+    await null;
     try{
       const keys = readList(PENDING_UP);
       const recs = [];
@@ -2222,9 +2225,11 @@ function flushFiles(onProgress){
       // שירות הקבצים לא זמין / אין רשת — הקבצים נשארים בתור וננסה שוב בהתחברות הבאה
       console.warn("file sync paused", e);
       return false;
-    }finally{ flushPromise = null; }
+    }
   })();
-  return flushPromise;
+  flushPromise = run;
+  run.finally(() => { if (flushPromise === run) flushPromise = null; });
+  return run;
 }
 window.addEventListener("online", () => flushFiles());
 
