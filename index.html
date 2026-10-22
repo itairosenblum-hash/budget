@@ -205,6 +205,11 @@
   .send-btn[aria-disabled="true"]{opacity:.45;pointer-events:none;}
   .send-btn.wa .ic{background:#DDF5E6;}
   .busy{opacity:.6;pointer-events:none;}
+  .date-wrap{position:relative;}
+  .date-wrap input.date-il{padding-left:44px;}
+  .date-wrap .cal-btn{position:absolute;left:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;border:none;background:transparent;font-size:18px;cursor:pointer;border-radius:8px;}
+  .date-wrap .cal-btn:hover{background:var(--card-2);}
+  .date-wrap input[type=date]{position:absolute;left:6px;bottom:0;width:34px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;}
   .field.uncertain input,.field.uncertain select{border:2px solid var(--amber) !important;}
   .field.uncertain::after{content:"לא זוהה בוודאות — כדאי לבדוק מול החשבונית";display:block;font-size:12px;color:var(--amber-ink);margin-top:4px;}
   .file-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border:1px dashed var(--border);border-radius:var(--radius-sm);background:var(--card);margin-bottom:14px;}
@@ -268,7 +273,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 11:25</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 11:40</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -291,8 +296,8 @@
     </div>
     <div class="field"><label for="bAmount">סכום ההזמנה</label><input id="bAmount" class="ltr money" inputmode="decimal" autocomplete="off"></div>
     <div class="grid2">
-      <div class="field"><label for="bOpen">ת.פ (תאריך פתיחה)</label><input id="bOpen" type="date"></div>
-      <div class="field"><label for="bValid">תוקף ההזמנה</label><input id="bValid" type="date"></div>
+      <div class="field"><label for="bOpen">ת.פ (תאריך פתיחה)</label><input id="bOpen" class="ltr date-il" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off"></div>
+      <div class="field"><label for="bValid">תוקף ההזמנה</label><input id="bValid" class="ltr date-il" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off"></div>
     </div>
     <div class="field"><label for="bVat">היתרה יורדת לפי</label>
       <select id="bVat"><option value="total">מחיר כולל מע"מ</option><option value="before">מחיר לפני מע"מ</option></select>
@@ -343,8 +348,8 @@
       <div class="field"><label for="oSerial">מס' סודר</label><input id="oSerial" class="ltr" inputmode="numeric"></div>
     </div>
     <div class="grid2">
-      <div class="field"><label for="oDate">תחילה (תאריך הנפקה)</label><input id="oDate" type="date"></div>
-      <div class="field"><label for="oEnd">סיום</label><input id="oEnd" type="date"></div>
+      <div class="field"><label for="oDate">תחילה (תאריך הנפקה)</label><input id="oDate" class="ltr date-il" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off"></div>
+      <div class="field"><label for="oEnd">סיום</label><input id="oEnd" class="ltr date-il" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off"></div>
     </div>
     <div class="field-group-title">הכלי</div>
     <div class="grid2">
@@ -392,7 +397,7 @@
       <div class="field"><label for="iNumber">מס' חשבונית</label><input id="iNumber" class="ltr" inputmode="numeric"></div>
     </div>
     <div class="grid2">
-      <div class="field"><label for="iDate">תאריך החשבונית</label><input id="iDate" type="date"></div>
+      <div class="field"><label for="iDate">תאריך החשבונית</label><input id="iDate" class="ltr date-il" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off"></div>
       <div class="field"><label for="iAlloc">מספר הקצאה</label><input id="iAlloc" class="ltr" inputmode="numeric"></div>
     </div>
     <div class="grid3">
@@ -515,6 +520,47 @@ function setNum(id, v){
   const el = $(id);
   const n = v == null || v === "" ? null : parseFloat(String(v).replace(/[^\d.\-]/g, ""));
   el.value = document.activeElement === el ? (n ?? "") : fmtFieldValue(n, el.classList.contains("int") ? "int" : "money");
+}
+/* תאריכים: בכל שדות האתר בפורמט DD/MM/YYYY (בלי תלות בהגדרות האזור של הדפדפן).
+   בפנים נשמר YYYY-MM-DD. ליד כל שדה יש כפתור 📅 שפותח את לוח השנה של המכשיר. */
+function ilToISO(str){
+  const m = String(str || "").trim().match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2}|\d{4})$/);
+  if (!m) return "";
+  let [, d, mo, y] = m; if (y.length === 2) y = "20" + y;
+  const iso = `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  const t = new Date(iso + "T00:00:00");
+  return !isNaN(t) && t.getDate() === +d && t.getMonth() + 1 === +mo ? iso : "";
+}
+function getDate(id){ return ilToISO($(id).value); }
+function setDate(id, iso){ $(id).value = iso ? fmtDateIL(iso) : ""; $(id).closest(".field")?.classList.remove("invalid"); }
+function setupDateInputs(){
+  document.querySelectorAll("input.date-il").forEach(el => {
+    if (el.parentElement.classList.contains("date-wrap")) return;
+    const wrap = document.createElement("div"); wrap.className = "date-wrap";
+    el.parentNode.insertBefore(wrap, el); wrap.appendChild(el);
+    const native = document.createElement("input"); native.type = "date"; native.tabIndex = -1; native.setAttribute("aria-hidden", "true");
+    const btn = document.createElement("button"); btn.type = "button"; btn.className = "cal-btn"; btn.textContent = "📅"; btn.setAttribute("aria-label", "בחירה מלוח השנה");
+    wrap.append(native, btn);
+    btn.onclick = () => {
+      native.value = getDate(el.id) || todayISO();
+      try{ native.showPicker(); }catch(e){ native.focus(); native.click(); }
+    };
+    native.onchange = () => { if (native.value){ setDate(el.id, native.value); el.dispatchEvent(new Event("change")); } };
+    // הקלדה: לוכסנים נוספים לבד (22102026 → 22/10/2026)
+    el.addEventListener("input", e => {
+      if (e.inputType && e.inputType.startsWith("delete")) return;
+      const v = el.value;
+      if (/[^\d\/]/.test(v) || v.includes("/")) return;
+      const d = v.replace(/\D/g, "").slice(0, 8);
+      el.value = d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+    });
+    el.addEventListener("blur", () => {
+      const raw = el.value.trim();
+      if (!raw){ el.closest(".field")?.classList.remove("invalid"); return; }
+      const iso = ilToISO(raw);
+      if (iso) setDate(el.id, iso); else { el.closest(".field")?.classList.add("invalid"); toast("תאריך לא תקין — DD/MM/YYYY"); }
+    });
+  });
 }
 document.addEventListener("focusin", e => {
   const el = e.target;
@@ -882,8 +928,8 @@ function openBudgetForm(id){
   $("bOrderNo").value = l?.orderNumber || "";
   $("bReq").value = l?.requisition || "";
   setNum("bAmount", l ? l.amount : null);
-  $("bOpen").value = l?.openDate || "";
-  $("bValid").value = l?.validUntil || "";
+  setDate("bOpen", l?.openDate);
+  setDate("bValid", l?.validUntil);
   $("bVat").value = l?.vatMode || "total";
   $("bTitle").value = l?.title || "";
   $("bNotes").value = l?.notes || "";
@@ -892,6 +938,7 @@ function openBudgetForm(id){
   openSheet("overlayBudget");
 }
 $("btnSaveBudget").onclick = () => {
+  if (!datesValid(["bOpen", "bValid"])) return;
   const companyId = $("bCompany").value;
   if (!companyId && !$("bTitle").value.trim()){ $("bCompany").closest(".field").classList.add("invalid"); toast("צריך לבחור חברה"); return; }
   const old = state.budgetLines.find(x => x.id === editingBudgetId) || {};
@@ -903,8 +950,8 @@ $("btnSaveBudget").onclick = () => {
     orderNumber: $("bOrderNo").value.trim(),
     requisition: $("bReq").value.trim(),
     amount: numOf("bAmount") || 0,
-    openDate: $("bOpen").value,
-    validUntil: $("bValid").value,
+    openDate: getDate("bOpen"),
+    validUntil: getDate("bValid"),
     vatMode: $("bVat").value,
     title: $("bTitle").value.trim(),
     notes: $("bNotes").value.trim(),
@@ -1036,7 +1083,7 @@ function renderOrders(){
       </div>
       <div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
       <div class="item-actions">
-        <button class="mini-btn pri" data-issue-order="${o.id}">📄 הפקת 1007</button>
+        <button class="mini-btn pri" data-issue-order="${o.id}">📄 הפקת 1007 (PDF)</button>
         <button class="mini-btn wa" data-send-order="${o.id}">📤 שליחה</button>
         <button class="mini-btn" data-edit-order="${o.id}">✏️ עריכה</button>
       </div>
@@ -1068,8 +1115,8 @@ function openOrderForm(id, preset){
   const line = budgetById(lineId);
   $("oBudget").value = lineId;
   $("oCompany").value = o?.companyId || line?.companyId || preset?.companyId || "";
-  $("oDate").value = o?.date || todayISO();
-  $("oEnd").value = o?.endDate || "";
+  setDate("oDate", o?.date || todayISO());
+  setDate("oEnd", o?.endDate);
   $("oNumber").value = o ? (o.number || "") : (line?.orderNumber || "");
   $("oSerial").value = o ? (o.serial || "") : nextSerial(lineId);
   $("oTzadi").value = o?.tzadi || "";
@@ -1118,15 +1165,22 @@ function showOrdersTab(o){
   activeTab = "orders"; localStorage.setItem("tzahram_tab", activeTab);
   search = ""; $("searchInput").value = "";
 }
+function datesValid(ids){
+  const bad = ids.filter(id => $(id).value.trim() && !getDate(id));
+  bad.forEach(id => $(id).closest(".field").classList.add("invalid"));
+  if (bad.length) toast("יש תאריך לא תקין — הפורמט הוא DD/MM/YYYY");
+  return !bad.length;
+}
 function collectOrder(){
+  if (!datesValid(["oDate", "oEnd"])) return null;
   const companyId = $("oCompany").value;
   if (!companyId){ $("oCompany").parentElement.classList.add("invalid"); toast("צריך לבחור חברה"); return null; }
   const old = state.orders.find(x => x.id === editingOrderId) || {};
   return Object.assign({}, old, {
     id: editingOrderId || uid(),
     companyId,
-    date: $("oDate").value || todayISO(),
-    endDate: $("oEnd").value,
+    date: getDate("oDate") || todayISO(),
+    endDate: getDate("oEnd"),
     number: $("oNumber").value.trim(),
     serial: $("oSerial").value.trim(),
     tzadi: $("oTzadi").value.trim(),
@@ -1202,52 +1256,227 @@ function downloadBlob(blob, name){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
+/* ---------- 1007 כ-PDF ----------
+   הרקע (1007-bg.jpg) הוא הטופס המקורי כפי שהוא, עם אזורי השדות בלבד מנוקים.
+   הערכים נכתבים בגופן Heebo (אותו גופן של הטופס) על קנבס — הדפדפן מסדר עברית ומספרים נכון —
+   ומונחים מעל הרקע בעמוד PDF בגודל Letter, בדיוק במיקומים של הטופס ב-Word. */
+const BG_1007_URL = "1007-bg.jpg";
+const PDF_MIME = "application/pdf";
+// מיקומים בנקודות (pt), נמדדו מהטופס המקורי. baseline = קו הבסיס של השורה.
+const F1007 = {
+  page: [612, 792], right: 539.93, left: 72,
+  lineA: { baseline: 229.41, alColon: 455.368, dateColon: 185.892 },
+  lineB: { baseline: 332.01 },
+  lineC: { baseline: 357.66 },
+  block: { first: 434.61, heading2Gap: 50.27, detailsGap: 26.68, bottom: 588 },
+  size: 12, lineH: 17.625,
+};
+const scriptCache = {};
+function loadScript(src){
+  return scriptCache[src] ||= new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = resolve;
+    s.onerror = () => { delete scriptCache[src]; reject(new Error("טעינת רכיב נכשלה (אין אינטרנט?)")); };
+    document.head.appendChild(s);
+  });
+}
+async function loadPdfLib(){
+  if (!window.PDFLib) await loadScript("https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js");
+  return window.PDFLib;
+}
+let bg1007Cache = null;
+async function bg1007Bytes(){
+  if (!bg1007Cache){
+    const res = await fetch(BG_1007_URL, { cache: "no-cache" });
+    if (!res.ok) throw new Error("רקע הטופס 1007 לא נמצא");
+    bg1007Cache = await res.arrayBuffer();
+  }
+  return bg1007Cache;
+}
+function wrapLines(ctx, text, maxW){
+  const out = [];
+  for (const para of String(text || "").split(/\r?\n/)){
+    const words = para.split(/\s+/).filter(Boolean);
+    if (!words.length){ out.push(""); continue; }
+    let line = words[0];
+    for (const w of words.slice(1)){
+      const t = line + " " + w;
+      if (ctx.measureText(t).width <= maxW) line = t; else { out.push(line); line = w; }
+    }
+    out.push(line);
+  }
+  return out;
+}
+// שורת "קטעים" מימין לשמאל: [{t, b}] — כמו ריצות טקסט ב-Word (תווית מודגשת, ערך רגיל)
+function drawRuns(ctx, runs, rightX, baseline, size){
+  let x = rightX;
+  for (const r of runs){
+    ctx.font = `${r.b ? 700 : 400} ${size}px Heebo`;
+    ctx.fillText(r.t, x, baseline);
+    x -= ctx.measureText(r.t).width;
+  }
+  return x;
+}
+function runsWidth(ctx, runs, size){
+  return runs.reduce((w, r) => { ctx.font = `${r.b ? 700 : 400} ${size}px Heebo`; return w + ctx.measureText(r.t).width; }, 0);
+}
+// מקטין את הגופן עד שהשורה נכנסת ברוחב הנתון
+function fitSize(ctx, runs, maxW, size){
+  let s = size;
+  while (s > 7 && runsWidth(ctx, runs, s) > maxW) s -= 0.5;
+  return s;
+}
+
+async function render1007Overlay(o){
+  const K = 4;  // פיקסלים לנקודה — טקסט חד בהדפסה
+  const [W, H] = F1007.page;
+  await Promise.all([document.fonts.load("400 48px Heebo"), document.fonts.load("700 48px Heebo")]).catch(() => {});
+  const cv = document.createElement("canvas");
+  cv.width = W * K; cv.height = H * K;
+  const ctx = cv.getContext("2d");
+  ctx.scale(K, K);
+  ctx.direction = "rtl"; ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"; ctx.fillStyle = "#000";
+  const f = fieldsFor(o);
+  const S = F1007.size;
+
+  // שורה 1: "אל: [שם החברה]" מימין, "תאריך: [תאריך]" משמאל
+  const A = F1007.lineA;
+  ctx.font = `700 ${S}px Heebo`;
+  const alW = ctx.measureText("אל").width, dateLabelW = ctx.measureText("תאריך").width;
+  ctx.fillText("אל", A.alColon + alW, A.baseline);
+  const companyRuns = [{ t: ":  " + f["[שם החברה]"] }];
+  const maxCompany = A.alColon - (A.dateColon + dateLabelW + 18);
+  drawRuns(ctx, companyRuns, A.alColon, A.baseline, fitSize(ctx, companyRuns, maxCompany, S));
+  ctx.font = `700 ${S}px Heebo`;
+  ctx.fillText("תאריך", A.dateColon + dateLabelW, A.baseline);
+  drawRuns(ctx, [{ t: ": " + f["[תאריך הנפקת מסמך]"] }], A.dateColon, A.baseline, S);
+
+  // שורה 2: הזמנה מס' · סודר · מס' צ'  (כמו ב-Word: מימין לשמאל, עם אותם רווחים)
+  const runsB = [
+    { t: "הזמנה מס' ", b: true }, { t: `${f["[מס' הזמנה]"]}    ` },
+    { t: "סודר", b: true }, { t: ` ${f["[מס' סודר]"]}    ` },
+    { t: "מס' צ' ", b: true }, { t: `${f["[מס' צ']"]}` },
+  ];
+  const fullW = F1007.right - F1007.left;
+  drawRuns(ctx, runsB, F1007.right, F1007.lineB.baseline, fitSize(ctx, runsB, fullW, S));
+  // שורה 3: סוג הכלי · שעות מנוע · יחידה
+  const runsC = [
+    { t: "סוג הכלי", b: true }, { t: ` ${f["[סוג הכלי]"]}         ` },
+    { t: "שעות מנוע", b: true }, { t: ` ${f["[שעות מנוע]"]}      ` },
+    { t: "יחידה", b: true }, { t: ` ${f["[יחידה]"]}` },
+  ];
+  drawRuns(ctx, runsC, F1007.right, F1007.lineC.baseline, fitSize(ctx, runsC, fullW, S));
+
+  // התיקונים + "התיקון יבוצע:" + הפירוט — הכותרת השנייה זזה למטה לפי אורך התיקונים,
+  // ואם הטקסט ארוך הגופן קטן כדי לא לעלות על החתימה.
+  const B = F1007.block;
+  let size = S, lay;
+  for (;;){
+    const lh = F1007.lineH * size / S;
+    ctx.font = `400 ${size}px Heebo`;
+    const rep = wrapLines(ctx, f["[שדה תיקונים]"], fullW);
+    const det = wrapLines(ctx, f["[פירוט התיקון]"], fullW);
+    const h2 = B.first + (Math.max(rep.length, 1) - 1) * lh + B.heading2Gap * (0.5 + 0.5 * size / S);
+    const d0 = h2 + B.detailsGap * (0.5 + 0.5 * size / S);
+    const last = d0 + (Math.max(det.length, 1) - 1) * lh;
+    lay = { rep, det, h2, d0, lh, size };
+    if (last <= B.bottom || size <= 7) break;
+    size -= 0.5;
+  }
+  ctx.font = `400 ${lay.size}px Heebo`;
+  lay.rep.forEach((t, i) => ctx.fillText(t, F1007.right, B.first + i * lay.lh));
+  ctx.font = `700 ${S}px Heebo`;
+  ctx.fillText("התיקון יבוצע:", F1007.right, lay.h2);
+  ctx.font = `400 ${lay.size}px Heebo`;
+  lay.det.forEach((t, i) => ctx.fillText(t, F1007.right, lay.d0 + i * lay.lh));
+
+  return new Promise(res => cv.toBlob(res, "image/png"));
+}
+
+async function build1007Pdf(o){
+  const [{ PDFDocument }, bgBytes, overlay] = await Promise.all([loadPdfLib(), bg1007Bytes(), render1007Overlay(o)]);
+  const doc = await PDFDocument.create();
+  const [W, H] = F1007.page;
+  const page = doc.addPage([W, H]);
+  page.drawImage(await doc.embedJpg(bgBytes), { x: 0, y: 0, width: W, height: H });
+  page.drawImage(await doc.embedPng(await overlay.arrayBuffer()), { x: 0, y: 0, width: W, height: H });
+  doc.setTitle(`הזמנת עבודה ${o.number || ""}${o.serial ? ` סודר ${o.serial}` : ""} (במקום טופס 1007)`);
+  doc.setCreator("תקציב אחזקה צהר\"מ");
+  return new Blob([await doc.save()], { type: PDF_MIME });
+}
+
 async function issue1007(id, btn){
   const o = state.orders.find(x => x.id === id); if (!o) return;
   btn?.classList.add("busy");
   try{
-    downloadBlob(await build1007(o), "1007.docx");
+    downloadBlob(await build1007Pdf(o), "1007.pdf");
     toast("הקובץ 1007 הופק ✓");
   }catch(e){ console.error(e); toast("ההפקה נכשלה: " + e.message); }
   finally{ btn?.classList.remove("busy"); }
 }
 
-/* ---------- שליחה ---------- */
-function orderMessage(o){
-  return `שלום, מצורפת הזמנת עבודה מס' ${o.number || ""} (במקום טופס 1007)` +
-    (o.tzadi ? ` עבור צ' ${o.tzadi}` : "") + (o.vehicle ? ` (${o.vehicle})` : "") + ".";
+/* ---------- שליחת קובץ ----------
+   הדרך היחידה לצרף את הקובץ עצמו לוואטסאפ או למייל מאתר היא תפריט השיתוף של המכשיר
+   (טלפון, ומחשב Windows/Mac): בוחרים שם וואטסאפ, Gmail, Outlook וכו' — והקובץ כבר מצורף.
+   קישורי wa.me / mailto יודעים להעביר רק טקסט, ולכן הם גיבוי: הקובץ יורד, ומצרפים אותו ידנית. */
+function canShareFiles(mime){
+  try{ return !!(navigator.canShare && navigator.canShare({ files: [new File(["x"], "x.pdf", { type: mime })] })); }catch(e){ return false; }
 }
-function openSendSheet(id){
-  const o = state.orders.find(x => x.id === id); if (!o) return;
-  const c = companyById(o.companyId) || {};
+function openFileShareSheet({ title, fileName, mime, blobP, message, subject, company, extra = "" }){
+  const c = company || {};
   const wa = waNumber(c.mobile);
-  const canShareFiles = !!(navigator.canShare && navigator.canShare({ files: [new File([""], "1007.docx", { type: DOCX_MIME })] }));
-  $("sendTitle").textContent = `שליחת 1007 ל${c.name || "חברה"}`;
+  const share = canShareFiles(mime);
+  blobP.catch(() => {});
+  $("sendTitle").textContent = title;
   $("sendBody").innerHTML = `
-    ${canShareFiles ? `<button class="send-btn" id="sendShare"><span class="ic">📤</span><span>שיתוף הקובץ<small>נפתח תפריט השיתוף — בוחרים וואטסאפ או מייל, והקובץ מצורף</small></span></button>` : ""}
-    <button class="send-btn wa" id="sendWa" ${wa ? "" : 'aria-disabled="true"'}><span class="ic">💬</span><span>וואטסאפ ל${escapeHtml(c.name || "")}<small>${wa ? `<span dir="ltr">${escapeHtml(c.mobile)}</span> · הקובץ יורד, ומצרפים אותו בצ'אט` : "אין נייד בכרטיס החברה"}</small></span></button>
-    <button class="send-btn" id="sendMail" ${c.email ? "" : 'aria-disabled="true"'}><span class="ic">✉️</span><span>מייל ל${escapeHtml(c.name || "")}<small>${c.email ? `<span dir="ltr">${escapeHtml(c.email)}</span> · הקובץ יורד, ומצרפים אותו למייל` : "אין אימייל בכרטיס החברה"}</small></span></button>`;
-  // בונים את הקובץ מראש, כדי שתפריט השיתוף ייפתח מיד בלחיצה (בטלפון מותר לפתוח אותו רק סמוך ללחיצה).
-  const blobP = build1007(o); blobP.catch(() => {});
+    ${share ? `<button class="send-btn wa" id="sendShare" style="border-color:var(--pri);"><span class="ic">📤</span><span>שליחת הקובץ בוואטסאפ / מייל<small>נפתח תפריט השיתוף — בוחרים וואטסאפ, Gmail או Outlook, והקובץ כבר מצורף</small></span></button>`
+      : `<div class="item-note" style="margin-bottom:10px;">בדפדפן הזה אין תפריט שיתוף קבצים. לחיצה על וואטסאפ או מייל תוריד את הקובץ ותפתח את השיחה — ואז מצרפים אותו (📎).</div>`}
+    <button class="send-btn" id="sendWa" ${wa ? "" : 'aria-disabled="true"'}><span class="ic">💬</span><span>וואטסאפ ל${escapeHtml(c.name || "חברה")}<small>${wa ? `<span dir="ltr">${escapeHtml(c.mobile)}</span> · הקובץ יורד ונפתחת השיחה — מצרפים אותו בצ'אט` : "אין נייד בכרטיס החברה"}</small></span></button>
+    <button class="send-btn" id="sendMail" ${c.email ? "" : 'aria-disabled="true"'}><span class="ic">✉️</span><span>מייל ל${escapeHtml(c.name || "חברה")}<small>${c.email ? `<span dir="ltr">${escapeHtml(c.email)}</span> · הקובץ יורד ונפתח מייל — מצרפים אותו` : "אין אימייל בכרטיס החברה"}</small></span></button>
+    <button class="send-btn" id="sendDownload"><span class="ic">⬇️</span><span>הורדת הקובץ<small>${escapeHtml(fileName)}</small></span></button>
+    ${extra}`;
   const withFile = async (btn, fn) => {
     btn.classList.add("busy");
     try{ await fn(await blobP); }
     catch(e){ if (e?.name !== "AbortError"){ console.error(e); toast("השליחה נכשלה: " + e.message); } }
     finally{ btn.classList.remove("busy"); }
   };
-  if (canShareFiles) $("sendShare").onclick = e => withFile(e.currentTarget, async blob => {
-    await navigator.share({ files: [new File([blob], "1007.docx", { type: DOCX_MIME })], title: "1007", text: orderMessage(o) });
-  });
+  if (share) $("sendShare").onclick = e => withFile(e.currentTarget, blob =>
+    navigator.share({ files: [new File([blob], fileName, { type: mime })], title: subject || fileName, text: message }));
   $("sendWa").onclick = e => withFile(e.currentTarget, async blob => {
-    downloadBlob(blob, "1007.docx");
-    window.open(`https://wa.me/${wa}?text=${encodeURIComponent(orderMessage(o))}`, "_blank", "noopener");
+    downloadBlob(blob, fileName);
+    window.open(`https://wa.me/${wa}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
   });
   $("sendMail").onclick = e => withFile(e.currentTarget, async blob => {
-    downloadBlob(blob, "1007.docx");
-    const subject = `הזמנת עבודה מס' ${o.number || ""} (במקום טופס 1007)`;
-    location.href = `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(orderMessage(o) + "\n\nבברכה")}`;
+    downloadBlob(blob, fileName);
+    location.href = `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(subject || fileName)}&body=${encodeURIComponent(message + "\n\nבברכה")}`;
   });
+  $("sendDownload").onclick = e => withFile(e.currentTarget, async blob => downloadBlob(blob, fileName));
   openSheet("overlaySend");
+}
+
+function orderMessage(o){
+  return `שלום, מצורפת הזמנת עבודה מס' ${o.number || ""}${o.serial ? ` סודר ${o.serial}` : ""} (במקום טופס 1007)` +
+    (o.tzadi ? ` עבור צ' ${o.tzadi}` : "") + (o.vehicle ? ` (${o.vehicle})` : "") + ".";
+}
+function openSendSheet(id){
+  const o = state.orders.find(x => x.id === id); if (!o) return;
+  const c = companyById(o.companyId) || {};
+  openFileShareSheet({
+    title: `שליחת 1007 ל${c.name || "חברה"}`,
+    fileName: "1007.pdf", mime: PDF_MIME,
+    // בונים את הקובץ מראש, כדי שתפריט השיתוף ייפתח מיד בלחיצה (בטלפון מותר לפתוח אותו רק סמוך ללחיצה)
+    blobP: build1007Pdf(o),
+    message: orderMessage(o),
+    subject: `הזמנת עבודה מס' ${o.number || ""} (במקום טופס 1007)`,
+    company: c,
+    extra: `<button class="send-btn" id="sendWord"><span class="ic">📝</span><span>הורדה כקובץ Word<small>לעריכה ידנית לפני שליחה</small></span></button>`,
+  });
+  $("sendWord").onclick = async e => {
+    e.currentTarget.classList.add("busy");
+    try{ downloadBlob(await build1007(o), "1007.docx"); }catch(err){ toast("ההפקה נכשלה: " + err.message); }
+    finally{ e.currentTarget.classList.remove("busy"); }
+  };
 }
 
 /* =====================================================================
@@ -1392,7 +1621,7 @@ function openInvoiceForm(id){
   fillOrderSelect(i?.orderId);
   $("iDocType").value = i?.docType || "חשבונית מס";
   $("iNumber").value = i?.number || "";
-  $("iDate").value = i?.date || todayISO();
+  setDate("iDate", i?.date || todayISO());
   $("iAlloc").value = i?.allocationNumber || "";
   setNum("iBeforeVat", i?.beforeVat || null);
   setNum("iVat", i?.vat || null);
@@ -1493,7 +1722,7 @@ async function scanPendingFile(){
 function applyScan(r){
   const conf = r.confidence || {}, low = k => typeof conf[k] === "number" && conf[k] < 0.7;
   const set = (id, v) => { if (v != null && v !== "") $(id).value = v; };
-  set("iDocType", r.documentType); set("iNumber", r.invoiceNumber); set("iDate", r.date);
+  set("iDocType", r.documentType); set("iNumber", r.invoiceNumber); if (r.date) setDate("iDate", r.date);
   if (r.amountBeforeVat != null) setNum("iBeforeVat", r.amountBeforeVat);
   if (r.vat != null) setNum("iVat", r.vat);
   if (r.total != null) setNum("iTotal", r.total); set("iAlloc", r.allocationNumber);
@@ -1518,6 +1747,7 @@ function applyScan(r){
 }
 
 $("btnSaveInvoice").onclick = async () => {
+  if (!datesValid(["iDate"])) return;
   const total = numOf("iTotal");
   if (!(total > 0)){ $("iTotal").closest(".field").classList.add("invalid"); toast("צריך סכום לתשלום"); return; }
   const old = state.invoices.find(x => x.id === editingInvoiceId) || {};
@@ -1528,7 +1758,7 @@ $("btnSaveInvoice").onclick = async () => {
     orderId: $("iOrder").value,
     docType: $("iDocType").value.trim(),
     number: $("iNumber").value.trim(),
-    date: $("iDate").value || todayISO(),
+    date: getDate("iDate") || todayISO(),
     allocationNumber: $("iAlloc").value.trim(),
     beforeVat: numOf("iBeforeVat") || 0,
     vat: numOf("iVat") || 0,
@@ -1844,6 +2074,7 @@ $("btnClearCfg").onclick = () => {
 };
 
 /* ---------- boot ---------- */
+setupDateInputs();
 render();
 initFirebase();
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
