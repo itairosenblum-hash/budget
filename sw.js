@@ -2,7 +2,7 @@
 // sw.js's own bytes, which is what makes the browser notice there's an update at
 // all -- a byte-identical sw.js is never re-installed, no matter how much
 // index.html changed on the server.
-const CACHE_NAME = 'tzahram-budget-v6';
+const CACHE_NAME = 'tzahram-budget-v7';
 const SHELL = [
   './',
   './index.html',
@@ -24,7 +24,9 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      // כל האפליקציות ב-itairosenblum-hash.github.io חולקות את אותו מאגר מטמון,
+      // ולכן מוחקים רק גרסאות ישנות של האפליקציה הזו — לא את המטמון של TripCost ואחרות.
+      Promise.all(keys.filter((k) => k.startsWith('tzahram-budget-') && k !== CACHE_NAME).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
