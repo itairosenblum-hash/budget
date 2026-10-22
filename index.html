@@ -327,7 +327,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 13:25</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 16:55</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -2410,6 +2410,56 @@ async function buildStampedPdf(c = stampCtx, dateISO = getDate("sDate") || today
   doc.getPages().forEach((pg, i) => { if (positions[i]) pg.drawImage(st, stampRect(pg, positions[i], ratio)); });
   return new Blob([await doc.save()], { type: "application/pdf" });
 }
+/* גיבוי ל-PDF שלא אפשר לערוך ישירות (מוצפן/מוגן, מבנה חריג): מציירים כל עמוד כתמונה ברזולוציה גבוהה
+   ומטביעים עליה את החותמת — כך החותמת מופיעה בוודאות בכל העמודים. */
+async function buildStampedPdfRaster(c, dateISO){
+  const { PDFDocument } = await loadPdfLib();
+  const { pdf, positions, ratio } = c;
+  const stampCv = await composeStamp(dateISO);
+  const doc = await PDFDocument.create();
+  for (let i = 0; i < pdf.numPages; i++){
+    const pg = await pdf.getPage(i + 1);
+    const vp1 = pg.getViewport({ scale: 1 });
+    const scale = Math.min(3, 1800 / vp1.width);
+    const vp = pg.getViewport({ scale });
+    const cv = document.createElement("canvas"); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+    const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+    await pg.render({ canvasContext: ctx, viewport: vp }).promise;
+    const p = positions[i];
+    if (p){ const sw = p.w * cv.width; ctx.drawImage(stampCv, p.x * cv.width, p.y * cv.height, sw, sw * ratio); }
+    const jpg = await (await new Promise(r => cv.toBlob(r, "image/jpeg", 0.88))).arrayBuffer();
+    const im = await doc.embedJpg(jpg);
+    doc.addPage([vp1.width, vp1.height]).drawImage(im, { x: 0, y: 0, width: vp1.width, height: vp1.height });
+  }
+  return new Blob([await doc.save()], { type: "application/pdf" });
+}
+// בודק שהקובץ החתום תקין: אותו מספר עמודים, וכל עמוד שאמור לקבל חותמת אכן "התכהה" באזור החותמת
+async function stampedPdfOk(blob, c){
+  try{
+    const pdfjs = await loadPdfjs();
+    const out = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+    if (out.numPages !== c.pages) return false;
+    for (let i = 0; i < c.pages; i++){
+      const p = c.positions[i]; if (!p) continue;
+      const [a, b] = await Promise.all([pageRaster(null, "pdf", out, i, 240), pageRaster(c.rec, c.kind, c.pdf, i, 240)]);
+      if (a.width !== b.width || Math.abs(a.height - b.height) > 2) return false;
+      const x = Math.floor(p.x * a.width), y = Math.floor(p.y * a.height);
+      const w = Math.max(4, Math.floor(p.w * a.width)), h = Math.max(2, Math.floor(p.w * a.width * c.ratio));
+      const ink = cv => { const d = cv.getContext("2d").getImageData(x, y, Math.min(w, cv.width - x), Math.min(h, cv.height - y)).data; let n = 0; for (let k = 0; k < d.length; k += 4) if (0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2] < 160) n++; return n / (d.length / 4); };
+      if (ink(a) - ink(b) < 0.01) return false;
+    }
+    return true;
+  }catch(e){ console.warn("stamp verify failed", e); return false; }
+}
+// בונה את ה-PDF החתום ומוודא שהחותמת על כל העמודים; אם לא — עובר לגיבוי של ציור העמודים כתמונה
+async function buildStampedPdfSafe(c, dateISO){
+  if (c.kind !== "pdf") return buildStampedPdf(c, dateISO);
+  let blob = null;
+  try{ blob = await buildStampedPdf(c, dateISO); }catch(e){ console.warn("direct stamp failed", e); }
+  if (blob && await stampedPdfOk(blob, c)) return blob;
+  console.warn("stamp not on every page — using raster fallback");
+  return buildStampedPdfRaster(c, dateISO);
+}
 /* מיקום אוטומטי: מחפשים בעמוד את האזור הריק ביותר בגודל החותמת (מעדיפים את החצי התחתון).
    עובד על תמונה מוקטנת של העמוד כפי שהוא מוצג (כולל סיבוב), באותן יחידות של stampRect. */
 async function pageRaster(rec, kind, pdf, pageIndex, width = 320){
@@ -2472,7 +2522,7 @@ async function autoStampInvoice(id, { share = true, defer = false, quiet = false
     const ratio = stampCv.height / stampCv.width;
     const c = { rec, kind, pdf, pages: pdf ? pdf.numPages : 1, positions: [], ratio };
     await fillAutoPositions(c, ratio, onPage);   // מיקום ריק בכל עמוד
-    const blob = await buildStampedPdf(c, todayISO());
+    const blob = await buildStampedPdfSafe(c, todayISO());
     await storeFile(id + "_s", blob, stampedName(inv), { defer });
     const cur = state.invoices.find(x => x.id === id); if (!cur) return false;
     upsert("invoices", Object.assign({}, cur, { stamped: { date: todayISO(), name: stampedName(inv), positions: c.positions, pages: c.pages } }));
@@ -2521,7 +2571,7 @@ $("btnSaveStamp").onclick = async () => {
     lift.show("שמירת החותמת", "מטביע חתימה וחותמת…");
     lift.creep(0.3);
     await fillAutoPositions(stampCtx, stampCtx.ratio, (i, n) => { if (n > 1) lift.status(`מטביע חתימה וחותמת… עמוד ${i + 1} מתוך ${n}`); });
-    const blob = await buildStampedPdf();
+    const blob = await buildStampedPdfSafe(stampCtx, getDate("sDate") || todayISO());
     const inv = stampCtx.inv;
     await storeFile(inv.id + "_s", blob, stampedName(inv), { defer: true });
     localStorage.setItem(STAMP_POS_KEY, JSON.stringify(stampCtx.pos));
