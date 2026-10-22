@@ -1,0 +1,39 @@
+rules_version = '2';
+// תקציב אחזקה צהר"מ — חוקי Firestore (זהים במבנה ל-TripCost).
+// מדביקים ב-Firebase Console ← Firestore Database ← Rules ← Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function isMember(data) {
+      return request.auth.token.email_verified == true
+        && data.members is list
+        && myEmail() in data.members;
+    }
+
+    // הנתונים שלך: גישה מלאה לבעל החשבון.
+    match /users/{uid}/{document=**} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // מסמך המצב המסונכרן: חשבונות ששותפו יכולים לקרוא ולעדכן נתונים,
+    // אבל לא לשנות את רשימת השיתוף (members). השיתוף עצמו יתווסף בשלב מאוחר יותר.
+    match /users/{uid}/data/state {
+      allow read: if signedIn() && resource != null && isMember(resource.data);
+      allow update: if signedIn() && isMember(resource.data)
+                    && request.resource.data.members == resource.data.members;
+    }
+
+    match /invites/{email} {
+      allow read: if signedIn()
+                  && (myEmail() == email || resource.data.ownerUid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn()
+                    && resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow delete: if signedIn()
+                    && (resource.data.ownerUid == request.auth.uid || myEmail() == email);
+    }
+  }
+}

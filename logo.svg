@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#3F5126"/>
+  <!-- ground -->
+  <rect x="64" y="392" width="384" height="10" rx="5" fill="#2C3A1A"/>
+  <!-- mast -->
+  <rect x="336" y="118" width="18" height="268" rx="6" fill="#D8D2BE"/>
+  <rect x="362" y="118" width="18" height="268" rx="6" fill="#D8D2BE"/>
+  <rect x="334" y="150" width="48" height="10" rx="4" fill="#B9B29A"/>
+  <rect x="334" y="250" width="48" height="10" rx="4" fill="#B9B29A"/>
+  <!-- carriage + forks -->
+  <rect x="376" y="276" width="16" height="96" rx="5" fill="#2A2A28"/>
+  <rect x="376" y="356" width="84" height="16" rx="5" fill="#2A2A28"/>
+  <!-- pallet + crate -->
+  <rect x="398" y="300" width="56" height="46" rx="5" fill="#C98B3E"/>
+  <path d="M398 323h56M426 300v46" stroke="#9E6A2C" stroke-width="5"/>
+  <rect x="394" y="346" width="64" height="10" rx="3" fill="#8A6234"/>
+  <!-- overhead guard -->
+  <path d="M150 210 L196 132 H322" fill="none" stroke="#2A2A28" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M316 132 V250" stroke="#2A2A28" stroke-width="16" stroke-linecap="round"/>
+  <!-- body -->
+  <path d="M96 336 V262 Q96 236 122 236 H232 L262 206 H322 Q336 206 336 222 V336 Z" fill="#E8A92A"/>
+  <rect x="96" y="300" width="240" height="40" rx="8" fill="#D08F18"/>
+  <!-- counterweight -->
+  <path d="M96 248 Q70 252 70 290 V330 Q70 340 82 340 H104 V248 Z" fill="#B87A12"/>
+  <!-- seat & wheel -->
+  <rect x="200" y="214" width="16" height="30" rx="5" fill="#2A2A28"/>
+  <path d="M268 214 L286 240" stroke="#2A2A28" stroke-width="8" stroke-linecap="round"/>
+  <rect x="256" y="206" width="26" height="9" rx="4" fill="#2A2A28"/>
+  <!-- wheels -->
+  <circle cx="150" cy="352" r="40" fill="#1F1F1D"/>
+  <circle cx="150" cy="352" r="16" fill="#9A9686"/>
+  <circle cx="292" cy="358" r="34" fill="#1F1F1D"/>
+  <circle cx="292" cy="358" r="13" fill="#9A9686"/>
+</svg>
