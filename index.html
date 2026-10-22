@@ -16,6 +16,7 @@
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-app-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-auth-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-functions-compat.js"></script>
 <style>
   /* Same design system as TripCost, re-tinted: olive (army) instead of teal, forklift amber as the accent. */
   :root{
@@ -203,6 +204,10 @@
   .send-btn[aria-disabled="true"]{opacity:.45;pointer-events:none;}
   .send-btn.wa .ic{background:#DDF5E6;}
   .busy{opacity:.6;pointer-events:none;}
+  .field.uncertain input,.field.uncertain select{border:2px solid var(--amber) !important;}
+  .field.uncertain::after{content:"לא זוהה בוודאות — כדאי לבדוק מול החשבונית";display:block;font-size:12px;color:var(--amber-ink);margin-top:4px;}
+  .file-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border:1px dashed var(--border);border-radius:var(--radius-sm);background:var(--card);margin-bottom:14px;}
+  .file-row .fname{flex:1;min-width:120px;font-size:14px;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   #versionFooter{text-align:center;font-size:12px;color:var(--ink-soft);padding:24px 10px 10px;}
 
   @media (min-width: 900px){
@@ -235,7 +240,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 10:15</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">22/10/2026 10:45</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -325,6 +330,42 @@
 </div>
 <datalist id="dlTzadi"></datalist><datalist id="dlVehicle"></datalist><datalist id="dlUnit"></datalist>
 
+<!-- Invoice sheet -->
+<div class="overlay" id="overlayInvoice">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 id="invoiceFormTitle">חשבונית חדשה</h2>
+    <div class="file-row">
+      <label class="mini-btn" style="cursor:pointer;">📎 צירוף קובץ<input type="file" id="iFileInput" accept="image/*,application/pdf" hidden></label>
+      <span class="fname" id="iFileName">לא צורף קובץ</span>
+      <button class="mini-btn pri" id="btnScanFile" type="button">✨ קריאה אוטומטית</button>
+      <button class="mini-btn danger" id="btnRemoveFile" type="button" aria-label="הסרת הקובץ">✕</button>
+    </div>
+    <div class="field"><label for="iCompany">חברה</label><select id="iCompany"></select></div>
+    <div id="newCompanyHint"></div>
+    <div class="field"><label for="iOrder">הזמנת עבודה (1007)</label><select id="iOrder"></select></div>
+    <div class="grid2">
+      <div class="field"><label for="iDocType">סוג מסמך</label><input id="iDocType" list="dlDocType"></div>
+      <div class="field"><label for="iNumber">מס' חשבונית</label><input id="iNumber" class="ltr" inputmode="numeric"></div>
+    </div>
+    <div class="field"><label for="iDate">תאריך החשבונית</label><input id="iDate" type="date"></div>
+    <div class="grid3">
+      <div class="field"><label for="iBeforeVat">לפני מע"מ</label><input id="iBeforeVat" type="number" inputmode="decimal" step="0.01" min="0"></div>
+      <div class="field"><label for="iVat">מע"מ</label><input id="iVat" type="number" inputmode="decimal" step="0.01" min="0"></div>
+      <div class="field"><label for="iTotal">סה"כ לתשלום</label><input id="iTotal" type="number" inputmode="decimal" step="0.01" min="0"></div>
+    </div>
+    <div class="field"><label for="iBudget">סעיף תקציב</label><select id="iBudget"></select></div>
+    <div class="field"><label for="iDesc">פירוט</label><textarea id="iDesc" rows="2"></textarea></div>
+    <div class="sheet-actions">
+      <button class="btn-primary" id="btnSaveInvoice">שמירה</button>
+      <button class="btn-ghost btn-danger-outline" id="btnDeleteInvoice">מחיקה</button>
+      <button class="btn-ghost" data-close>ביטול</button>
+    </div>
+  </div>
+</div>
+<datalist id="dlDocType"><option value="חשבונית מס"><option value="חשבונית מס קבלה"><option value="חשבון עסקה"><option value="קבלה"></datalist>
+<input type="file" id="scanInput" accept="image/*,application/pdf" hidden>
+
 <!-- Send 1007 sheet -->
 <div class="overlay" id="overlaySend">
   <div class="sheet">
@@ -365,7 +406,7 @@
 <script>
 "use strict";
 /* =====================================================================
-   תקציב אחזקה צהר"מ — סעיפי תקציב, הזמנות עבודה (1007), כרטיסיות חברות, סנכרון.
+   תקציב אחזקה צהר"מ — סעיפי תקציב, הזמנות עבודה (1007), חשבוניות, כרטיסיות חברות, סנכרון.
    מבנה הנתונים (נשמר מקומית ב-localStorage ובענן במסמך אחד ב-Firestore):
      state = { budgetLines:[…], companies:[…], orders:[…], invoices:[…], tomb:{id:ts} }
    לכל פריט יש id ו-_u (זמן עדכון אחרון) — המיזוג בין מכשירים בוחר את הגרסה החדשה יותר,
@@ -388,7 +429,7 @@ const TABS = [
   { id: "budget",    label: "תקציב", icon: "📊" },
   { id: "orders",    label: "הזמנות 1007", icon: "📄" },
   { id: "companies", label: "חברות",       icon: "🏢" },
-  { id: "invoices",  label: "חשבוניות",    icon: "🧾", soon: true },
+  { id: "invoices",  label: "חשבוניות",    icon: "🧾" },
 ];
 
 let state = loadState();
@@ -454,6 +495,8 @@ function removeItem(listName, id){
   const i = list.findIndex(x => x.id === id);
   if (i < 0) return;
   const [removed] = list.splice(i, 1);
+  // הקובץ המקומי של חשבונית נמחק רק אם המחיקה לא בוטלה תוך כמה שניות.
+  if (listName === "invoices" && removed.hasFile) setTimeout(() => { if (!state.invoices.some(x => x.id === id)) fileDel(id).catch(() => {}); }, 8000);
   state.tomb[id] = now();
   saveState(); render();
   showUndo("נמחק", () => {
@@ -485,10 +528,8 @@ function syncedJson(s){
 }
 
 /* ---------- derived ---------- */
-function spentForLine(lineId){
-  // כרגע: סכום הזמנות העבודה (1007) שמשויכות לסעיף. בשלב החשבוניות, חשבונית שמקושרת להזמנה תחליף את הסכום שלה.
-  return state.orders.filter(o => o.budgetLineId === lineId).reduce((s, o) => s + (Number(o.amount) || 0), 0);
-}
+// ניצול סעיף: חשבוניות + הזמנות פתוחות (שעוד אין להן חשבונית). ראו lineUsage.
+function spentForLine(lineId){ return lineUsage(lineId).total; }
 function matches(obj, fields){
   if (!search) return true;
   const q = search.toLowerCase();
@@ -503,9 +544,9 @@ function renderTabs(){
       <span>${t.icon}</span><span>${t.label}</span>${t.soon ? "" : `<span class="count tnum">${counts[t.id]}</span>`}
     </button>`).join("");
   $("searchInput").placeholder = activeTab === "companies" ? "🔍 חיפוש חברה, איש קשר או טלפון..."
-    : activeTab === "orders" ? "🔍 חיפוש הזמנה לפי מספר, צ', חברה או כלי..." : "🔍 חיפוש סעיף לפי שם או מספר...";
-  $("searchInput").style.display = activeTab === "invoices" ? "none" : "";
-  document.querySelector(".fab").style.display = activeTab === "invoices" ? "none" : "";
+    : activeTab === "orders" ? "🔍 חיפוש הזמנה לפי מספר, צ', חברה או כלי..."
+    : activeTab === "invoices" ? "🔍 חיפוש חשבונית לפי מספר, חברה או הזמנה..." : "🔍 חיפוש סעיף לפי שם או מספר...";
+
 }
 
 function renderBudget(){
@@ -551,7 +592,7 @@ function renderBudget(){
           <div class="item-amt"><div class="big">${fmtMoney(rem)}</div><div class="small">יתרה מתוך ${fmtMoney(amt)}</div></div>
         </div>
         <div class="bar ${p >= 100 ? "over" : p >= 85 ? "warn" : ""}"><i style="width:${Math.min(100, p)}%"></i></div>
-        <div class="item-meta"><span>נוצל ${fmtMoney(used)}</span><span>${Math.round(p)}%</span></div>
+        <div class="item-meta"><span>נוצל ${fmtMoney(used)}${(() => { const u = lineUsage(l.id); return u.open && u.inv ? ` <span style="opacity:.8">(חשבוניות ${fmtMoney(u.inv)} · הזמנות פתוחות ${fmtMoney(u.open)})</span>` : u.open ? ` <span style="opacity:.8">(הזמנות פתוחות)</span>` : ""; })()}</span><span>${Math.round(p)}%</span></div>
         ${l.notes ? `<div class="item-note">${escapeHtml(l.notes)}</div>` : ""}
         <div class="item-actions">
           <button class="mini-btn pri" data-edit-budget="${l.id}">✏️ עריכה</button>
@@ -598,14 +639,6 @@ function renderCompanies(){
       </div>
     </div>`;
   }).join("") + `</div>`;
-}
-
-function renderInvoices(){
-  return `<div class="soon-card" style="margin-top:10px;">
-    <div style="font-size:40px;">🧾</div>
-    <p><b>חשבוניות — השלב הבא</b></p>
-    <p>סריקת חשבונית, שיוך להזמנה, לסעיף ולחברה, הטבעת חותמת ושליחה בוואטסאפ או במייל.</p>
-  </div>`;
 }
 
 function render(){
@@ -740,6 +773,7 @@ function renderOrders(){
       (o.vehicle || o.hours) && ["כלי", escapeHtml([o.vehicle, o.hours ? `${o.hours} ש"מ` : ""].filter(Boolean).join(" · "))],
       o.unit && ["יחידה", escapeHtml(o.unit)],
       o.repairs && ["תיקונים", escapeHtml(o.repairs).replace(/\n/g, "<br>")],
+      invoiceForOrder(o.id) && ["חשבונית", `🧾 ${escapeHtml(invoiceForOrder(o.id).number || "")} · ${fmtMoney(invoiceForOrder(o.id).total)}`],
       ["סעיף", b ? escapeHtml(budgetLabel(b)) : `<span style="color:var(--ink-soft)">${o.budgetLineId ? "סעיף שנמחק" : "לא שויך"}</span>`],
     ].filter(Boolean);
     return `
@@ -939,6 +973,288 @@ function openSendSheet(id){
   openSheet("overlaySend");
 }
 
+/* =====================================================================
+   חשבוניות — סריקה עם Gemini (Cloud Function scanInvoice), שיוך לחברה, להזמנה ולסעיף.
+   הקובץ עצמו נשמר כרגע במכשיר (IndexedDB) לצורך הטבעת חותמת ושליחה בשלב הבא.
+   ===================================================================== */
+const FILES_DB = "tzahram_budget_files";
+function openFilesDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(FILES_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("files");
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function fileOp(mode, fn){
+  const db = await openFilesDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("files", mode);
+    const req = fn(tx.objectStore("files"));
+    tx.oncomplete = () => resolve(req?.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const filePut = (id, rec) => fileOp("readwrite", s => s.put(rec, id));
+const fileGet = id => fileOp("readonly", s => s.get(id));
+const fileDel = id => fileOp("readwrite", s => s.delete(id));
+
+function orderById(id){ return state.orders.find(o => o.id === id); }
+function invoiceLineId(inv){ return inv.budgetLineId || orderById(inv.orderId)?.budgetLineId || ""; }
+function invoiceForOrder(orderId){ return state.invoices.find(i => i.orderId === orderId); }
+function lineUsage(lineId){
+  const inv = state.invoices.filter(i => invoiceLineId(i) === lineId).reduce((s, i) => s + (Number(i.total) || 0), 0);
+  // הזמנה שכבר יש לה חשבונית נספרת לפי החשבונית, לא לפי הסכום שהוזן בהזמנה.
+  const open = state.orders.filter(o => o.budgetLineId === lineId && !invoiceForOrder(o.id)).reduce((s, o) => s + (Number(o.amount) || 0), 0);
+  return { inv, open, total: inv + open };
+}
+
+function renderInvoices(){
+  const list = [...state.invoices].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || (b._u || 0) - (a._u || 0));
+  const shown = list.filter(i => {
+    if (!search) return true;
+    const c = companyById(i.companyId), o = orderById(i.orderId);
+    return [i.number, i.description, c?.name, o?.number, o?.tzadi].join(" ").toLowerCase().includes(search.toLowerCase());
+  });
+  const sum = list.reduce((s, i) => s + (Number(i.total) || 0), 0);
+  let html = `
+    <button class="send-btn" id="btnScanInvoice" style="margin-top:6px;">
+      <span class="ic" style="background:var(--amber-tint);">📷</span>
+      <span>סריקת חשבונית<small>מצלמים או בוחרים תמונה / PDF — הפרטים מתמלאים אוטומטית</small></span>
+    </button>
+    <div class="section-title"><span>חשבוניות</span><span class="tnum">${list.length} · ${fmtMoney(sum)}</span></div>`;
+  if (!list.length) return html + `<div class="empty"><div class="big">🧾</div><p><b>עוד אין חשבוניות</b></p><p>סורקים חשבונית, או לוחצים על + להזנה ידנית</p></div>`;
+  if (!shown.length) return html + `<div class="empty"><p>לא נמצאו חשבוניות שמתאימות לחיפוש</p></div>`;
+  return html + `<div class="cards">` + shown.map(i => {
+    const c = companyById(i.companyId), o = orderById(i.orderId), b = budgetById(invoiceLineId(i));
+    const kv = [
+      o && ["הזמנה", `${escapeHtml(o.number || "—")}${o.tzadi ? ` · צ' <span dir="ltr">${escapeHtml(o.tzadi)}</span>` : ""}`],
+      ["סעיף", b ? escapeHtml(budgetLabel(b)) : `<span style="color:var(--ink-soft)">לא שויך</span>`],
+      i.description && ["פירוט", escapeHtml(i.description)],
+      (i.beforeVat || i.vat) && ["מע\"מ", `${fmtMoney(i.beforeVat)} + ${fmtMoney(i.vat)}`],
+    ].filter(Boolean);
+    return `
+    <div class="item-card">
+      <div class="item-top">
+        <div style="min-width:0;">
+          <span class="order-no" style="background:var(--pri-tint);color:var(--pri-dark);">${escapeHtml(i.docType || "חשבונית")} ${escapeHtml(i.number || "")}</span>
+          <div class="item-title" style="margin-top:6px;">${escapeHtml(c?.name || "חברה לא נבחרה")}</div>
+          <div class="item-sub">${escapeHtml(fmtDateIL(i.date))}</div>
+        </div>
+        <div class="item-amt"><div class="big">${fmtMoney(i.total)}</div><div class="small">כולל מע"מ</div></div>
+      </div>
+      <div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
+      <div class="item-actions">
+        ${i.hasFile ? `<button class="mini-btn pri" data-view-invoice="${i.id}">👁️ צפייה</button>` : ""}
+        <button class="mini-btn" data-edit-invoice="${i.id}">✏️ עריכה</button>
+      </div>
+    </div>`;
+  }).join("") + `</div>`;
+}
+
+/* ---------- טופס חשבונית ---------- */
+let editingInvoiceId = null, pendingFile = null, pendingFileRemoved = false;
+
+function fillInvoiceSelects(){
+  const companies = [...state.companies].sort((a, b) => String(a.name).localeCompare(String(b.name), "he"));
+  $("iCompany").innerHTML = `<option value="">— בחירת חברה —</option>` + companies.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+  const lines = [...state.budgetLines].sort((a, b) => String(a.code).localeCompare(String(b.code), "he", { numeric: true }));
+  $("iBudget").innerHTML = `<option value="">— לפי ההזמנה / ללא —</option>` + lines.map(b => `<option value="${b.id}">${escapeHtml(budgetLabel(b))}</option>`).join("");
+}
+function fillOrderSelect(keep){
+  const cid = $("iCompany").value;
+  const orders = state.orders.filter(o => !cid || o.companyId === cid)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  $("iOrder").innerHTML = `<option value="">— ללא הזמנה —</option>` + orders.map(o => {
+    const taken = invoiceForOrder(o.id); const mine = taken && taken.id === editingInvoiceId;
+    return `<option value="${o.id}">הזמנה ${escapeHtml(o.number || "—")}${o.tzadi ? ` · צ' ${escapeHtml(o.tzadi)}` : ""} · ${escapeHtml(fmtDateIL(o.date))}${taken && !mine ? " (יש חשבונית)" : ""}</option>`;
+  }).join("");
+  if (keep && [...$("iOrder").options].some(op => op.value === keep)) $("iOrder").value = keep;
+}
+function renderFileRow(name){
+  $("iFileName").textContent = name || "לא צורף קובץ";
+  $("btnScanFile").style.display = (pendingFile) ? "" : "none";
+  $("btnRemoveFile").style.display = name ? "" : "none";
+}
+function setUncertain(map){
+  document.querySelectorAll("#overlayInvoice .field").forEach(f => f.classList.remove("uncertain", "invalid"));
+  for (const [id, on] of Object.entries(map || {})) if (on) $(id)?.closest(".field")?.classList.add("uncertain");
+}
+function openInvoiceForm(id){
+  const i = state.invoices.find(x => x.id === id);
+  editingInvoiceId = i ? i.id : null; pendingFile = null; pendingFileRemoved = false;
+  $("invoiceFormTitle").textContent = i ? "עריכת חשבונית" : "חשבונית חדשה";
+  fillInvoiceSelects();
+  $("iCompany").value = i?.companyId || "";
+  fillOrderSelect(i?.orderId);
+  $("iDocType").value = i?.docType || "חשבונית מס";
+  $("iNumber").value = i?.number || "";
+  $("iDate").value = i?.date || todayISO();
+  $("iBeforeVat").value = i?.beforeVat || "";
+  $("iVat").value = i?.vat || "";
+  $("iTotal").value = i?.total || "";
+  $("iBudget").value = i?.budgetLineId || "";
+  $("iDesc").value = i?.description || "";
+  $("newCompanyHint").innerHTML = "";
+  setUncertain({});
+  renderFileRow(i?.hasFile ? (i.fileName || "קובץ מצורף") : "");
+  $("btnDeleteInvoice").style.display = i ? "" : "none";
+  openSheet("overlayInvoice");
+}
+$("iCompany").addEventListener("change", () => fillOrderSelect($("iOrder").value));
+$("iOrder").addEventListener("change", () => {
+  const o = orderById($("iOrder").value); if (!o) return;
+  if (!$("iCompany").value){ $("iCompany").value = o.companyId; fillOrderSelect(o.id); }
+});
+// מע"מ: אם יש שני סכומים מתוך שלושה, משלימים את השלישי.
+["iBeforeVat", "iVat"].forEach(id => $(id).addEventListener("change", () => {
+  const a = parseFloat($("iBeforeVat").value), v = parseFloat($("iVat").value);
+  if (a > 0 && v >= 0 && !$("iTotal").value) $("iTotal").value = Math.round((a + v) * 100) / 100;
+}));
+
+/* ---------- קובץ ---------- */
+async function compressImage(file){
+  if (!/^image\//.test(file.type) || file.size < 1.2e6) return file;
+  try{
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, 2200 / Math.max(bmp.width, bmp.height));
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(bmp.width * scale); cv.height = Math.round(bmp.height * scale);
+    cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+    const blob = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.85));
+    return blob ? new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : file;
+  }catch(e){ return file; }
+}
+async function pickFile(f, autoScan){
+  if (!f) return;
+  if (!/^image\//.test(f.type) && f.type !== "application/pdf"){ toast("אפשר לצרף תמונה או PDF"); return; }
+  pendingFile = await compressImage(f);
+  if (pendingFile.size > 7 * 1024 * 1024){ toast("הקובץ גדול מדי (עד 7MB)"); pendingFile = null; return; }
+  pendingFileRemoved = false;
+  renderFileRow(pendingFile.name);
+  if (autoScan) scanPendingFile();
+}
+$("iFileInput").onchange = e => { pickFile(e.target.files[0], false); e.target.value = ""; };
+$("scanInput").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; openInvoiceForm(null); pickFile(f, true); };
+$("btnScanFile").onclick = () => scanPendingFile();
+$("btnRemoveFile").onclick = () => { pendingFile = null; pendingFileRemoved = true; renderFileRow(""); };
+
+function blobToBase64(blob){
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1]);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+function digitsOnly(s){ return String(s || "").replace(/\D/g, ""); }
+function matchCompany(name, taxId){
+  const t = digitsOnly(taxId);
+  if (t) { const c = state.companies.find(c => digitsOnly(c.hp) === t); if (c) return c; }
+  const n = String(name || "").replace(/בע"?מ|[\s"'.,-]/g, "");
+  if (n.length < 2) return null;
+  return state.companies.find(c => {
+    const cn = String(c.name || "").replace(/בע"?מ|[\s"'.,-]/g, "");
+    return cn && (cn.includes(n) || n.includes(cn));
+  }) || null;
+}
+function matchOrder(r, companyId){
+  const pool = state.orders.filter(o => (!companyId || o.companyId === companyId) && !invoiceForOrder(o.id));
+  const num = digitsOnly(r.orderNumber);
+  if (num){ const o = pool.find(o => digitsOnly(o.number) === num) || state.orders.find(o => digitsOnly(o.number) === num); if (o) return o; }
+  if (r.tzadi){ const o = pool.filter(o => digitsOnly(o.tzadi) === r.tzadi).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0]; if (o) return o; }
+  if (companyId){ const open = pool; if (open.length === 1) return open[0]; }
+  return null;
+}
+
+let scanning = false;
+async function scanPendingFile(){
+  if (!pendingFile || scanning) return;
+  if (!fbFunctions || !cloudUser){ toast("לקריאה אוטומטית צריך להתחבר (שורת הסנכרון למעלה)"); return; }
+  scanning = true;
+  const btn = $("btnScanFile"); btn.classList.add("busy"); btn.textContent = "⏳ קורא את החשבונית...";
+  try{
+    const call = fbFunctions.httpsCallable("scanInvoice", { timeout: 300000 });
+    const { data: r } = await call({ data: await blobToBase64(pendingFile), mimeType: pendingFile.type });
+    applyScan(r);
+    toast("החשבונית נקראה ✓ — כדאי לעבור על הפרטים");
+  }catch(e){
+    console.error(e);
+    const notDeployed = /not-found|internal/.test(e?.code || "") && !e?.details;
+    toast(notDeployed ? "שירות הקריאה עוד לא הופעל (צריך להגדיר את מפתח ה-Gemini)" : (e?.message || "הקריאה נכשלה — אפשר למלא ידנית"));
+  }finally{
+    scanning = false; btn.classList.remove("busy"); btn.textContent = "✨ קריאה אוטומטית";
+  }
+}
+function applyScan(r){
+  const conf = r.confidence || {}, low = k => typeof conf[k] === "number" && conf[k] < 0.7;
+  const set = (id, v) => { if (v != null && v !== "") $(id).value = v; };
+  set("iDocType", r.documentType); set("iNumber", r.invoiceNumber); set("iDate", r.date);
+  set("iBeforeVat", r.amountBeforeVat); set("iVat", r.vat); set("iTotal", r.total); set("iDesc", r.description);
+  const c = matchCompany(r.supplierName, r.supplierTaxId);
+  if (c){ $("iCompany").value = c.id; $("newCompanyHint").innerHTML = ""; }
+  else if (r.supplierName){
+    $("newCompanyHint").innerHTML = `<div class="item-note" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:-6px 0 14px;">
+      <span>זוהתה חברה שלא בכרטיסיות: <b>${escapeHtml(r.supplierName)}</b>${r.supplierTaxId ? ` (ח.פ <span dir="ltr">${escapeHtml(r.supplierTaxId)}</span>)` : ""}</span>
+      <button class="mini-btn pri" id="btnAddScannedCompany" type="button">+ הוספה</button></div>`;
+    $("btnAddScannedCompany").onclick = () => {
+      const nc = { id: uid(), name: r.supplierName, hp: r.supplierTaxId || "", contact: "", email: "", phone: "", mobile: "", notes: "", _u: now() };
+      state.companies.push(nc); saveState(); render();
+      fillInvoiceSelects(); $("iCompany").value = nc.id; fillOrderSelect();
+      $("newCompanyHint").innerHTML = ""; toast("החברה נוספה לכרטיסיות ✓ (את הטלפון והמייל משלימים שם)");
+    };
+  }
+  fillOrderSelect();
+  const o = matchOrder(r, $("iCompany").value);
+  if (o){ $("iOrder").value = o.id; if (!$("iCompany").value){ $("iCompany").value = o.companyId; fillOrderSelect(o.id); } }
+  setUncertain({ iNumber: low("invoiceNumber"), iDate: low("date"), iTotal: low("total") || !r.total, iCompany: !c || low("supplierName"), iOrder: !!r.orderNumber && !o });
+}
+
+$("btnSaveInvoice").onclick = async () => {
+  const total = parseFloat($("iTotal").value);
+  if (!(total > 0)){ $("iTotal").closest(".field").classList.add("invalid"); toast("צריך סכום לתשלום"); return; }
+  const old = state.invoices.find(x => x.id === editingInvoiceId) || {};
+  const id = editingInvoiceId || uid();
+  const inv = Object.assign({}, old, {
+    id,
+    companyId: $("iCompany").value,
+    orderId: $("iOrder").value,
+    docType: $("iDocType").value.trim(),
+    number: $("iNumber").value.trim(),
+    date: $("iDate").value || todayISO(),
+    beforeVat: parseFloat($("iBeforeVat").value) || 0,
+    vat: parseFloat($("iVat").value) || 0,
+    total,
+    budgetLineId: $("iBudget").value,
+    description: $("iDesc").value.trim(),
+  });
+  try{
+    if (pendingFile){
+      await filePut(id, { blob: pendingFile, name: pendingFile.name, type: pendingFile.type });
+      Object.assign(inv, { hasFile: true, fileName: pendingFile.name, fileType: pendingFile.type });
+    } else if (pendingFileRemoved){
+      await fileDel(id); Object.assign(inv, { hasFile: false, fileName: "", fileType: "" });
+    }
+  }catch(e){ console.error(e); toast("שמירת הקובץ במכשיר נכשלה"); }
+  const isNew = !editingInvoiceId;
+  upsert("invoices", inv); closeSheet("overlayInvoice");
+  toast(isNew ? "החשבונית נשמרה ✓" : "החשבונית עודכנה ✓");
+};
+$("btnDeleteInvoice").onclick = () => {
+  if (!editingInvoiceId) return;
+  closeSheet("overlayInvoice");
+  removeItem("invoices", editingInvoiceId);
+};
+async function viewInvoice(id){
+  try{
+    const rec = await fileGet(id);
+    if (!rec){ toast("הקובץ נשמר במכשיר אחר — אפשר לצפות בו שם"); return; }
+    const url = URL.createObjectURL(rec.blob);
+    window.open(url, "_blank", "noopener");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }catch(e){ console.error(e); toast("פתיחת הקובץ נכשלה"); }
+}
+
 /* ---------- events ---------- */
 $("tabs").addEventListener("click", e => {
   const b = e.target.closest("[data-tab]"); if (!b) return;
@@ -952,10 +1268,14 @@ $("view").addEventListener("click", e => {
   const o = e.target.closest("[data-edit-order]"); if (o) return openOrderForm(o.dataset.editOrder);
   const g = e.target.closest("[data-issue-order]"); if (g) return issue1007(g.dataset.issueOrder, g);
   const sd = e.target.closest("[data-send-order]"); if (sd) return openSendSheet(sd.dataset.sendOrder);
+  if (e.target.closest("#btnScanInvoice")) return $("scanInput").click();
+  const ei = e.target.closest("[data-edit-invoice]"); if (ei) return openInvoiceForm(ei.dataset.editInvoice);
+  const vi = e.target.closest("[data-view-invoice]"); if (vi) return viewInvoice(vi.dataset.viewInvoice);
   const nb = e.target.closest("[data-new-order-for]"); if (nb) return openOrderForm(null, { companyId: nb.dataset.newOrderFor });
 });
 $("searchInput").addEventListener("input", e => { search = e.target.value.trim(); render(); });
-$("btnAdd").onclick = () => activeTab === "companies" ? openCompanyForm(null) : activeTab === "orders" ? openOrderForm(null) : openBudgetForm(null);
+$("btnAdd").onclick = () => activeTab === "companies" ? openCompanyForm(null) : activeTab === "orders" ? openOrderForm(null)
+  : activeTab === "invoices" ? openInvoiceForm(null) : openBudgetForm(null);
 $("btnSettings").onclick = () => { renderSyncPanel(); openSheet("overlaySettings"); };
 $("syncStatusLine").onclick = () => { renderSyncPanel(); openSheet("overlaySettings"); };
 window.addEventListener("scroll", () => $("topbar").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
@@ -982,7 +1302,7 @@ $("importInput").onchange = async e => {
 /* =====================================================================
    Firebase — כניסה עם Google וסנכרון למסמך users/{uid}/data/state (כמו ב-TripCost).
    ===================================================================== */
-let fbAuth = null, fbDb = null, cloudUser = null, docRef = null, unsub = null, pushTimer = null;
+let fbAuth = null, fbDb = null, fbFunctions = null, cloudUser = null, docRef = null, unsub = null, pushTimer = null;
 let lastRemoteJson = null;
 
 function loadFirebaseConfig(){
@@ -1012,6 +1332,7 @@ function initFirebase(){
   try{
     const app = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(cfg);
     fbAuth = firebase.auth(app); fbDb = firebase.firestore(app);
+    try{ fbFunctions = app.functions("europe-west1"); }catch(e){ console.warn("functions sdk missing", e); }
     fbAuth.getRedirectResult().catch(e => { if (e?.code && e.code !== "auth/no-auth-event") toast("ההתחברות נכשלה: " + (e.message || e.code)); });
     setSyncStatus("syncing", "מתחבר...");
     fbAuth.onAuthStateChanged(user => {
