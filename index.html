@@ -344,7 +344,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">23/10/2026 21:40</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">23/10/2026 21:55</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -1144,6 +1144,31 @@ function fitText(ctx, t, maxW){
   return t + "…";
 }
 
+// שורות הניצול של סעיף — כמו בטבלת הסעיף: כל 1007 (עם החשבונית שלה), ואחריהן חשבוניות ששויכו ישירות לסעיף בלי 1007.
+// היתרה יורדת רק בניצול בפועל (חשבונית שנחתמה / מחיר ידני), כמו באתר.
+const USAGE_STATE = { open: "משוריין", invoiced: "ממתין לחתימה", done: "נוצל" };
+function usageRows(l){
+  const line = l, out = [];
+  let bal = Number(l.amount) || 0;
+  for (const r of lineRows(l)){
+    bal -= r.price;
+    out.push({ serial: r.o.serial || "", tzadi: r.o.tzadi || "", vehicle: r.o.vehicle || "", unit: r.o.unit || "",
+      start: fmtDateIL(r.o.date), end: fmtDateIL(r.o.endDate), hours: r.o.hours ? (parseInt(String(r.o.hours).replace(/\D/g, "")) || r.o.hours) : "",
+      state: USAGE_STATE[orderState(r.o)], reserved: r.reserved || 0, before: r.prices ? r.prices.before : null, total: r.prices ? r.prices.total : null,
+      balance: round2(bal), invoice: r.inv ? String(r.inv.number || "") : "", desc: String(r.o.repairs || "").split("\n")[0] });
+  }
+  const direct = state.invoices.filter(i => !orderById(i.orderId) && i.budgetLineId === l.id)
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  for (const i of direct){
+    const p = invoicePrices(i), amt = invoiceAmount(i, line);
+    if (i.stamped) bal -= amt;
+    out.push({ serial: "", tzadi: "", vehicle: "", unit: "", start: fmtDateIL(i.date), end: "", hours: "",
+      state: i.stamped ? "נוצל" : "ממתין לחתימה", reserved: i.stamped ? 0 : amt, before: i.stamped ? p.before : null, total: i.stamped ? p.total : null,
+      balance: round2(bal), invoice: String(i.number || ""), desc: i.description || "חשבונית ישירה לסעיף" });
+  }
+  return out;
+}
+
 async function budgetReportPdf(btn){
   const groups = reportGroups();
   if (!groups.length){ toast("אין סעיפים בסינון הנוכחי"); return; }
@@ -1152,14 +1177,19 @@ async function budgetReportPdf(btn){
     const fontsP = Promise.all(["400", "700", "800"].map(w => document.fonts.load(`${w} 40px Heebo`))).catch(() => {});
     const [{ PDFDocument }] = await Promise.all([loadPdfLib(), fontsP]);
     const W = 842, H = 595, K = 3, M = 32;   // A4 לרוחב, בנקודות
-    const GREEN = "#4E6530", TINT = "#E7ECDB", INK = "#1F2418", SOFT = "#6B7360", LINE = "#D9D5C3";
+    const GREEN = "#4E6530", TINT = "#E7ECDB", INK = "#1F2418", SOFT = "#6B7360", LINE = "#D9D5C3", RED = "#B5533C", AMBER = "#8A6110";
     const produced = fmtDateIL(todayISO());
     const filterTxt = budgetFilterLabel();
-    // עמודות מימין לשמאל: [כותרת, רוחב, יישור]
-    const COLS = [["סעיף", 40, "c"], ["מס' הזמנה", 92, "r"], ["מס' דרישה", 82, "r"], ["תיאור", 128, "r"], ["ת.פ", 62, "c"], ["תוקף", 62, "c"],
-      ["סטטוס", 50, "c"], ["סכום ההזמנה", 82, "l"], ["נוצל בפועל", 76, "l"], ["משוריין", 70, "l"], ["פנוי", 74, "l"]];
-    const tableW = COLS.reduce((s, c) => s + c[1], 0), scale = (W - 2 * M) / tableW;
-    const cols = []; { let x = W - M; for (const [t, w, a] of COLS){ const ww = w * scale; cols.push({ t, a, right: x, w: ww }); x -= ww; } }
+    const BOTTOM = H - 36;
+    // עמודות מימין לשמאל: [כותרת, רוחב יחסי, יישור]
+    const mkCols = defs => {
+      const tw = defs.reduce((s, c) => s + c[1], 0), sc = (W - 2 * M) / tw;
+      let x = W - M; return defs.map(([t, w, a]) => { const c = { t, a, right: x, w: w * sc }; x -= c.w; return c; });
+    };
+    const SUM = mkCols([["סעיף", 40, "c"], ["מס' הזמנה", 92, "r"], ["מס' דרישה", 82, "r"], ["תיאור", 128, "r"], ["ת.פ", 62, "c"], ["תוקף", 62, "c"],
+      ["סטטוס", 50, "c"], ["סכום ההזמנה", 82, "l"], ["נוצל בפועל", 76, "l"], ["משוריין", 70, "l"], ["פנוי", 74, "l"]]);
+    const USE = mkCols([["סודר", 30, "c"], ["מספר צ'", 64, "r"], ["סוג הכלי", 70, "r"], ["יחידה", 56, "r"], ["תחילה", 54, "c"], ["סיום", 54, "c"],
+      ["מצב", 62, "c"], ["שריון", 62, "l"], ['לפני מע"מ', 64, "l"], ['כולל מע"מ', 64, "l"], ["יתרה", 66, "l"], ["חשבונית", 54, "r"], ["תאור התיקון", 126, "r"]]);
     const pages = [];
     const newPage = () => {
       const cv = document.createElement("canvas"); cv.width = W * K; cv.height = H * K;
@@ -1183,16 +1213,20 @@ async function budgetReportPdf(btn){
       ctx.textAlign = "left"; ctx.font = `400 10px Heebo`; ctx.fillText(`הופק ${produced}`, M, 30);
       if (g.company?.hp){ ctx.fillText(`ח.פ ${g.company.hp}`, M, 50); }
     };
-    const tableHead = (ctx, y) => {
-      ctx.fillStyle = TINT; ctx.fillRect(M, y, W - 2 * M, 22);
-      for (const c of cols) cell(ctx, c, c.t, y + 15, { bold: true, size: 9, color: GREEN });
-      return y + 22;
+    const tableHead = (ctx, cols, y, h = 22, size = 9) => {
+      ctx.fillStyle = TINT; ctx.fillRect(M, y, W - 2 * M, h);
+      for (const c of cols) cell(ctx, c, c.t, y + h * 0.68, { bold: true, size, color: GREEN });
+      return y + h;
     };
+    const rule = (ctx, y) => { ctx.strokeStyle = LINE; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(M, y); ctx.lineTo(W - M, y); ctx.stroke(); };
     const money = v => fmtMoney(v);
     for (const g of groups){
       let ctx = newPage(); header(ctx, g, false);
+      let y;
+      // ממשיך לעמוד חדש של אותה חברה כשאין מקום; onNew מצייר מחדש את כותרת הטבלה
+      const ensure = (h, onNew) => { if (y + h > BOTTOM){ ctx = newPage(); header(ctx, g, true); y = 78; onNew?.(); } };
       // כרטיסי סיכום
-      const stats = [["סך ההזמנות", g.totals.amount, INK], ["נוצל בפועל", g.totals.actual, GREEN], ["משוריין", g.totals.reserved, "#8A6110"], ["פנוי", g.totals.free, g.totals.free < 0 ? "#B5533C" : "#3D7A52"]];
+      const stats = [["סך ההזמנות", g.totals.amount, INK], ["נוצל בפועל", g.totals.actual, GREEN], ["משוריין", g.totals.reserved, AMBER], ["פנוי", g.totals.free, g.totals.free < 0 ? RED : "#3D7A52"]];
       const sw = (W - 2 * M - 3 * 10) / 4;
       stats.forEach(([k, v, col], i) => {
         const x = W - M - (i + 1) * sw - i * 10;
@@ -1204,31 +1238,74 @@ async function budgetReportPdf(btn){
       const pct = g.totals.amount ? Math.round((g.totals.actual + g.totals.reserved) / g.totals.amount * 100) : 0;
       ctx.textAlign = "right"; ctx.fillStyle = SOFT; ctx.font = `400 10px Heebo`;
       ctx.fillText(`${g.rows.length} סעיפים · ${pct}% מהמסגרת נוצל או משוריין`, W - M, 150);
-      let y = tableHead(ctx, 160);
-      const ROW = 22, BOTTOM = H - 40;
+
+      // טבלת סיכום הסעיפים
+      const ROW = 22;
+      y = tableHead(ctx, SUM, 160);
       g.rows.forEach((r, i) => {
-        if (y + ROW > BOTTOM - ROW){ ctx = newPage(); header(ctx, g, true); y = tableHead(ctx, 80); }
+        ensure(ROW, () => { y = tableHead(ctx, SUM, y); });
         if (i % 2){ ctx.fillStyle = "#FAF9F4"; ctx.fillRect(M, y, W - 2 * M, ROW); }
-        ctx.strokeStyle = LINE; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(M, y + ROW); ctx.lineTo(W - M, y + ROW); ctx.stroke();
+        rule(ctx, y + ROW);
         const l = r.l, by = y + 15;
         const vals = [l.index || "—", l.orderNumber || "", l.requisition || "", l.title || "", fmtDateIL(l.openDate), fmtDateIL(l.validUntil),
           lineClosed(l) ? "סגור" : "פעיל", money(r.amount), money(r.actual), money(r.reserved), money(r.free)];
-        vals.forEach((v, j) => cell(ctx, cols[j], v, by, {
-          color: j === 6 && lineClosed(l) ? SOFT : j === 10 && r.free < 0 ? "#B5533C" : INK, bold: j === 10 }));
+        vals.forEach((v, j) => cell(ctx, SUM[j], v, by, {
+          color: j === 6 && lineClosed(l) ? SOFT : j === 10 && r.free < 0 ? RED : INK, bold: j === 10 }));
         y += ROW;
       });
-      // שורת סה"כ
+      ensure(ROW + 4);
       ctx.fillStyle = TINT; ctx.fillRect(M, y + 2, W - 2 * M, ROW);
-      cell(ctx, cols[0], 'סה"כ', y + 17, { bold: true });
+      cell(ctx, SUM[0], 'סה"כ', y + 17, { bold: true });
       [[7, g.totals.amount], [8, g.totals.actual], [9, g.totals.reserved], [10, g.totals.free]].forEach(([j, v]) =>
-        cell(ctx, cols[j], money(v), y + 17, { bold: true, color: j === 10 && v < 0 ? "#B5533C" : INK }));
+        cell(ctx, SUM[j], money(v), y + 17, { bold: true, color: j === 10 && v < 0 ? RED : INK }));
+      y += ROW + 4;
+
+      // שורות הניצול של כל סעיף
+      const UROW = 18, SEC = 26, UH = 18;
+      for (const r of g.rows){
+        const l = r.l, rows = usageRows(l);
+        const secTitle = (cont) => {
+          ctx.fillStyle = GREEN; ctx.fillRect(M, y, W - 2 * M, SEC);
+          ctx.textAlign = "right"; ctx.fillStyle = "#fff"; ctx.font = `700 11.5px Heebo`;
+          const t = [`סעיף ${l.index || "—"}`, l.orderNumber ? `הזמנה ${l.orderNumber}` : "", l.title || "", lineClosed(l) ? "סגור" : ""].filter(Boolean).join(" · ") + (cont ? " (המשך)" : "");
+          ctx.fillText(fitText(ctx, t, (W - 2 * M) * 0.5), W - M - 10, y + 17);
+          ctx.textAlign = "left"; ctx.font = `400 10px Heebo`;
+          ctx.fillText(`סכום ${money(r.amount)}  ·  נוצל ${money(r.actual)}  ·  משוריין ${money(r.reserved)}  ·  פנוי ${money(r.free)}`, M + 10, y + 17);
+          y += SEC;
+        };
+        y += 14;
+        ensure(SEC + UH + UROW * 2);
+        secTitle(false);
+        if (!rows.length){
+          ctx.textAlign = "right"; ctx.fillStyle = SOFT; ctx.font = `400 9.5px Heebo`;
+          ctx.fillText("אין שורות ניצול בסעיף", W - M - 10, y + 15); rule(ctx, y + 22); y += 22;
+          continue;
+        }
+        y = tableHead(ctx, USE, y, UH, 8.5);
+        // שורת פתיחה: סכום ההזמנה כיתרה
+        cell(ctx, USE[12], "יתרת פתיחה", y + 12.5, { size: 8.5, color: SOFT });
+        cell(ctx, USE[10], money(r.amount), y + 12.5, { size: 8.5, bold: true });
+        rule(ctx, y + UROW); y += UROW;
+        rows.forEach((u, i) => {
+          ensure(UROW, () => { secTitle(true); y = tableHead(ctx, USE, y, UH, 8.5); });
+          if (i % 2){ ctx.fillStyle = "#FAF9F4"; ctx.fillRect(M, y, W - 2 * M, UROW); }
+          rule(ctx, y + UROW);
+          const vals = [u.serial, u.tzadi, u.vehicle, u.unit, u.start, u.end, u.state, u.reserved ? money(u.reserved) : "—",
+            u.before != null ? money(u.before) : "—", u.total != null ? money(u.total) : "—", money(u.balance), u.invoice, u.desc];
+          const stCol = u.state === "נוצל" ? GREEN : u.state === "משוריין" ? AMBER : SOFT;
+          vals.forEach((v, j) => cell(ctx, USE[j], v, y + 12.5, { size: 8.5,
+            color: j === 6 ? stCol : j === 10 && u.balance < 0 ? RED : (j === 8 || j === 9) && v !== "—" && (l.vatMode === "before") !== (j === 8) ? SOFT : INK,
+            bold: j === 10 }));
+          y += UROW;
+        });
+      }
     }
     // כותרת תחתונה עם מספרי עמודים
     pages.forEach(({ ctx }, i) => {
-      ctx.strokeStyle = LINE; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(M, H - 28); ctx.lineTo(W - M, H - 28); ctx.stroke();
+      ctx.strokeStyle = LINE; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(M, H - 26); ctx.lineTo(W - M, H - 26); ctx.stroke();
       ctx.fillStyle = SOFT; ctx.font = `400 9px Heebo`;
-      ctx.textAlign = "right"; ctx.fillText(`תקציב אחזקה צהר"מ · ${reportFileBase()}`, W - M, H - 14);
-      ctx.textAlign = "left"; ctx.fillText(`עמוד ${i + 1} מתוך ${pages.length}`, M, H - 14);
+      ctx.textAlign = "right"; ctx.fillText(`תקציב אחזקה צהר"מ · ${reportFileBase()}`, W - M, H - 13);
+      ctx.textAlign = "left"; ctx.fillText(`עמוד ${i + 1} מתוך ${pages.length}`, M, H - 13);
     });
     const doc = await PDFDocument.create();
     for (const { cv } of pages){
@@ -1249,11 +1326,11 @@ function budgetReportXlsx(){
   const groups = reportGroups();
   if (!groups.length){ toast("אין סעיפים בסינון הנוכחי"); return; }
   const MONEY = '"₪" #,##0.00';
-  const fmtCols = (ws, firstRow, colsIdx) => {
-    const range = XLSX.utils.decode_range(ws["!ref"]);
-    for (let R = firstRow; R <= range.e.r; R++) for (const C of colsIdx){
+  // עיצוב סכומים בטווח שורות ועמודות מסוים (בגיליון החברה יש שתי טבלאות עם עמודות שונות)
+  const fmtCells = (ws, r0, r1, colsIdx, z = MONEY) => {
+    for (let R = r0; R <= r1; R++) for (const C of colsIdx){
       const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
-      if (cell && cell.t === "n") cell.z = MONEY;
+      if (cell && cell.t === "n") cell.z = z;
     }
   };
   const wb = XLSX.utils.book_new();
@@ -1267,11 +1344,11 @@ function budgetReportXlsx(){
     ['סה"כ', groups.reduce((s, g) => s + g.rows.length, 0), round2(all.amount), round2(all.actual), round2(all.reserved), round2(all.free)],
   ];
   const wsSum = XLSX.utils.aoa_to_sheet(sum);
-  fmtCols(wsSum, 2, [2, 3, 4, 5]);
+  fmtCells(wsSum, 2, sum.length - 1, [2, 3, 4, 5]);
   wsSum["!cols"] = [28, 9, 15, 15, 15, 15].map(w => ({ wch: w }));
   wsSum["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
   XLSX.utils.book_append_sheet(wb, wsSum, "סיכום");
-  // גיליון לכל חברה
+  // גיליון לכל חברה: טבלת סיכום הסעיפים, ומתחתיה שורות הניצול של כל סעיף
   const used = new Set(["סיכום"]);
   for (const g of groups){
     const aoa = [
@@ -1284,10 +1361,31 @@ function budgetReportXlsx(){
         amount, actual, reserved, free, rows]),
       ['סה"כ', "", "", "", "", "", "", "", "", g.totals.amount, g.totals.actual, g.totals.reserved, g.totals.free, g.rows.reduce((s, r) => s + r.rows, 0)],
     ];
+    const sumEnd = aoa.length - 1;
+    const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 13 } }];
+    const moneyRanges = [];   // [r0, r1] של טבלאות הניצול
+    aoa.push([], ["שורות ניצול לפי סעיף"]);
+    merges.push({ s: { r: aoa.length - 1, c: 0 }, e: { r: aoa.length - 1, c: 13 } });
+    for (const r of g.rows){
+      const l = r.l;
+      aoa.push([]);
+      aoa.push([[`סעיף ${l.index || "—"}`, l.orderNumber ? `הזמנה ${l.orderNumber}` : "", l.title || "", lineClosed(l) ? "סגור" : "",
+        `סכום ${fmtMoney(r.amount)}`, `נוצל ${fmtMoney(r.actual)}`, `משוריין ${fmtMoney(r.reserved)}`, `פנוי ${fmtMoney(r.free)}`].filter(Boolean).join("  ·  ")]);
+      merges.push({ s: { r: aoa.length - 1, c: 0 }, e: { r: aoa.length - 1, c: 13 } });
+      const rows = usageRows(l);
+      if (!rows.length){ aoa.push(["אין שורות ניצול בסעיף"]); continue; }
+      aoa.push(["סודר", "מספר צ'", "סוג הכלי", "יחידה", "תחילה", "סיום", 'שע"מ', "מצב", "שריון", 'מחיר לפני מע"מ', 'מחיר כולל מע"מ', "יתרה", "חשבונית", "תאור התיקון"]);
+      const r0 = aoa.length;
+      aoa.push(["", "", "", "", "", "", "", "יתרת פתיחה", "", "", "", r.amount, "", ""]);
+      for (const u of rows) aoa.push([parseInt(u.serial) || u.serial, u.tzadi, u.vehicle, u.unit, u.start, u.end, u.hours, u.state,
+        u.reserved || "", u.before ?? "", u.total ?? "", u.balance, u.invoice, u.desc]);
+      moneyRanges.push([r0, aoa.length - 1]);
+    }
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    fmtCols(ws, 2, [9, 10, 11, 12]);
-    ws["!cols"] = [6, 13, 12, 26, 7, 11, 11, 8, 11, 15, 15, 14, 15, 7].map(w => ({ wch: w }));
-    ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 13 } }];
+    fmtCells(ws, 2, sumEnd, [9, 10, 11, 12]);
+    for (const [a, b] of moneyRanges){ fmtCells(ws, a, b, [8, 9, 10, 11]); fmtCells(ws, a, b, [6], "#,##0"); }
+    ws["!cols"] = [7, 13, 14, 14, 10, 11, 10, 13, 13, 15, 15, 14, 13, 40].map(w => ({ wch: w }));
+    ws["!merges"] = merges;
     let name = g.name.replace(/[\[\]:*?\/\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 31) || "חברה";
     for (let n = 2; used.has(name); n++) name = `${name.slice(0, 27)} (${n})`;
     used.add(name);
