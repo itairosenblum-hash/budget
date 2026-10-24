@@ -344,7 +344,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">23/10/2026 21:55</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">24/10/2026 20:30</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -504,12 +504,13 @@
 <div class="overlay" id="overlayStamp">
   <div class="sheet" style="max-width:600px;">
     <div class="sheet-handle"></div>
-    <h2>מיקום החותמת</h2>
+    <h2>חתימה על החשבונית</h2>
     <div class="grid2">
-      <div class="field"><label for="sDate">תאריך החתימה</label><input id="sDate" class="ltr date-il" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off"></div>
-      <div class="field" id="stampPageRow"><label for="sPage">עמוד להזזה</label><select id="sPage"></select></div>
+      <div class="field"><label for="sDate">באיזה תאריך לחתום?</label><input id="sDate" class="ltr date-il" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off">
+        <div style="display:flex;gap:6px;margin-top:6px;"><button type="button" class="mini-btn" data-sdate="0">היום</button><button type="button" class="mini-btn" data-sdate="-1">אתמול</button></div></div>
+      <div class="field" id="stampPageRow"><label for="sPage">עמוד</label><select id="sPage"></select></div>
     </div>
-    <div class="hint" style="margin:-4px 0 10px;">החותמת מוטבעת אוטומטית על כל עמודי החשבונית. כאן אפשר לגרור אותה למקום אחר בכל עמוד (בוחרים עמוד למעלה) או לשנות את התאריך.</div>
+    <div class="hint" style="margin:-4px 0 10px;">בחר תאריך, ואז קבע איפה החותמת תהיה: הקש על המקום הרצוי בחשבונית או גרור את החותמת. במסמך של כמה עמודים — בוחרים עמוד למעלה וממקמים בכל אחד.</div>
     <div id="stampStage" class="stamp-stage"></div>
     <div class="field" style="margin-top:12px;"><label for="sSize">גודל החותמת</label><input id="sSize" type="range" min="15" max="90" value="50" style="width:100%;"></div>
     <div class="sheet-actions">
@@ -2715,7 +2716,8 @@ async function openStampSheet(id){
   if (!rec){ toast(cloudReady() ? "הקובץ לא נמצא" : "צריך להתחבר כדי לטעון את הקובץ מהענן"); return; }
   const isPdf = (rec.type || rec.blob.type) === "application/pdf";
   stampCtx = { inv, rec, kind: isPdf ? "pdf" : "image", pageIndex: 0, pages: 1, positions: savedPositions(inv) };
-  setDate("sDate", inv.stamped?.date || todayISO());
+  // חתימה חדשה: לא ממלאים תאריך — המשתמש בוחר. הזזת חותמת קיימת: התאריך שכבר נחתם
+  setDate("sDate", inv.stamped?.date || "");
   $("stampPageRow").style.display = "none";
   $("stampStage").innerHTML = `<div class="empty" style="padding:30px;">טוען את החשבונית…</div>`;
   openSheet("overlayStamp");
@@ -2765,6 +2767,12 @@ async function renderStampStage(){
   stampCtx.ratio = stampCv.height / stampCv.width;
   placeOverlay(stampPos());
   enableDrag(ov);
+  // הקשה על העמוד — החותמת קופצת לשם (ממורכזת על נקודת ההקשה)
+  page.onpointerdown = e => {
+    const r = page.getBoundingClientRect(), w = stampCtx.pos.w;
+    const h = w * r.width * stampCtx.ratio / r.height;
+    placeOverlay({ w, x: (e.clientX - r.left) / r.width - w / 2, y: (e.clientY - r.top) / r.height - h / 2 });
+  };
 }
 function placeOverlay(p){
   const st = $("stampStage"), ov = st.querySelector(".stamp-overlay"), pg = st.querySelector(".stamp-page");
@@ -2793,10 +2801,18 @@ function enableDrag(ov){
 }
 $("sSize").addEventListener("input", () => placeOverlay({ ...stampCtx.pos, w: +$("sSize").value / 100 }));
 $("sPage").addEventListener("change", async () => { stampCtx.pageIndex = +$("sPage").value; await renderStampStage(); });
-$("sDate").addEventListener("change", async () => {
+async function refreshStampDate(){
   if (!stampCtx || !getDate("sDate")) return;
+  $("sDate").closest(".field").classList.remove("invalid");
   const ov = $("stampStage").querySelector(".stamp-overlay");
   if (ov) ov.src = (await composeStamp(getDate("sDate"))).toDataURL("image/png");
+}
+$("sDate").addEventListener("change", refreshStampDate);
+$("sDate").addEventListener("input", () => { if ($("sDate").value.length === 10) refreshStampDate(); });
+document.querySelectorAll("[data-sdate]").forEach(b => b.onclick = () => {
+  const d = new Date(); d.setDate(d.getDate() + +b.dataset.sdate);
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  setDate("sDate", iso); refreshStampDate();
 });
 
 // מיקום החותמת (שברים יחסית לעמוד כפי שהוא מוצג) → קואורדינטות ב-PDF, כולל עמודים מסובבים
@@ -2937,31 +2953,6 @@ function findBlankSpot(cv, ratio){
   }
   return { x: 0.05, y: 0.62, w: 0.42 };
 }
-// חותמת אוטומטית מיד אחרי העלאת חשבונית: מיקום אוטומטי, תאריך היום, שמירה בענן ופתיחת השליחה
-async function autoStampInvoice(id, { share = true, defer = false, quiet = false, onPage } = {}){
-  const inv = state.invoices.find(x => x.id === id); if (!inv?.hasFile) return false;
-  try{
-    const rec = await loadFile(id); if (!rec) return;
-    const kind = (rec.type || rec.blob.type) === "application/pdf" ? "pdf" : "image";
-    let pdf = null;
-    if (kind === "pdf"){ const pdfjs = await loadPdfjs(); pdf = await pdfjs.getDocument({ data: new Uint8Array(await rec.blob.arrayBuffer()) }).promise; }
-    const stampCv = await composeStamp(todayISO());
-    const ratio = stampCv.height / stampCv.width;
-    const c = { rec, kind, pdf, pages: pdf ? pdf.numPages : 1, positions: [], ratio };
-    await fillAutoPositions(c, ratio, onPage);   // מיקום ריק בכל עמוד
-    const blob = await buildStampedPdfSafe(c, todayISO());
-    await storeFile(id + "_s", blob, stampedName(inv), { defer });
-    const cur = state.invoices.find(x => x.id === id); if (!cur) return false;
-    upsert("invoices", Object.assign({}, cur, { stamped: { date: todayISO(), name: stampedName(inv), positions: c.positions, pages: c.pages } }));
-    if (!quiet) toast("החשבונית נחתמה ✓ — אפשר לשלוח");
-    if (share) openInvoiceShare(id);
-    return true;
-  }catch(e){
-    console.error(e);
-    if (!quiet) toast("החתימה האוטומטית נכשלה — אפשר לחתום ידנית בכפתור 🖋️");
-    return false;
-  }
-}
 // התקדמות ההעלאה באנימציה. כשכל הבתים נשלחו השרת עוד שומר — ממשיכים להתקדם לאט ומראים שהוא שומר, כדי שלא ייראה תקוע
 function uploadProgress(base, f, i, n, total, saving){
   const span = 0.98 - base, at = base + f * span * 0.85;
@@ -2969,30 +2960,29 @@ function uploadProgress(base, f, i, n, total, saving){
   if (saving){ lift.set(at); lift.creep(base + (f >= 0.999 ? 0.99 : f) * span, `${prefix}שומר בענן…`); }
   else lift.set(at, `מעלה לענן… ${prefix}${fmtSize(total * f)} / ${fmtSize(total)}`);
 }
-// שמירת חשבונית עם קובץ חדש: שמירה, חותמת, העלאה לענן — הכל באנימציית המנוף, ואז שליחה
+// שמירת חשבונית עם קובץ חדש: העלאת המקור לענן באנימציית המנוף, ואז חלון החתימה —
+// המשתמש בוחר תאריך ומיקום לחותמת; "שמירה ושליחה" שם מטביע, מעלה ופותח את השליחה.
 async function saveInvoiceFileFlow(id){
-  lift.show("שמירת חשבונית", "מטביע חתימה וחותמת…");
-  lift.set(0.06); lift.creep(0.3);
-  const stamped = await autoStampInvoice(id, { share: false, defer: true, quiet: true,
-    onPage: (i, n) => { if (n > 1) lift.set(0.06 + 0.24 * (i / n), `מטביע חתימה וחותמת… עמוד ${i + 1} מתוך ${n}`); } });
-  const pages = state.invoices.find(x => x.id === id)?.stamped?.pages || 1;
-  lift.set(0.32, stamped ? (pages > 1 ? `החותמת הוטבעה על ${pages} עמודים ✓` : "החותמת הוטבעה ✓") : "החתימה האוטומטית נכשלה — ממשיך לשמירה");
-  await new Promise(r => setTimeout(r, 700));
+  lift.show("שמירת חשבונית", "שומר את הקובץ…");
+  lift.set(0.06);
   if (cloudReady() && navigator.onLine){
-    lift.creep(0.6, "מעלה לענן…");
-    const ok = await flushFiles((f, i, n, total, saving) => uploadProgress(0.32, f, i, n, total, saving));
-    await lift.done(ok ? (stamped ? "נשמר בענן ונחתם ✓" : "נשמר בענן ✓") : "נשמר במכשיר — יעלה לענן בהמשך");
+    lift.creep(0.3, "מעלה לענן…");
+    const ok = await flushFiles((f, i, n, total, saving) => uploadProgress(0.06, f, i, n, total, saving));
+    await lift.done(ok ? "נשמר בענן ✓" : "נשמר במכשיר — יעלה לענן בהמשך", 900);
   } else {
-    await lift.done("נשמר במכשיר — יעלה לענן כשתתחבר", 1300);
+    await lift.done("נשמר במכשיר — יעלה לענן כשתתחבר", 1100);
   }
-  if (!stamped) toast("אפשר לחתום ידנית בכפתור 🖋️");
-  openInvoiceShare(id);
+  openStampSheet(id);
 }
 
 // חשבונית בלי קובץ (הוזנה ידנית): מסמנים שנבדקה והוזרמה — ואז היא יורדת מהתקציב בפועל
 function markChecked(id){
   const inv = state.invoices.find(x => x.id === id); if (!inv) return;
-  upsert("invoices", Object.assign({}, inv, { stamped: { date: todayISO(), manual: true } }));
+  const ans = prompt("באיזה תאריך לסמן שנבדקה והוזרמה? (DD/MM/YYYY)", fmtDateIL(todayISO()));
+  if (ans === null) return;
+  const date = ilToISO(ans);
+  if (!date){ toast("תאריך לא תקין — DD/MM/YYYY"); return; }
+  upsert("invoices", Object.assign({}, inv, { stamped: { date, manual: true } }));
   toast("סומנה כנבדקה והוזרמה ✓ — הסכום ירד מהתקציב");
 }
 
@@ -3000,7 +2990,7 @@ function stampedName(inv){ return `חשבונית ${inv.number || ""} חתומה
 $("btnSaveStamp").onclick = async () => {
   if (!stampCtx?.pos){ toast("החשבונית עוד לא נטענה"); return; }
   stampCtx.ratio = stampCtx.ratio || 0.25;
-  if (!getDate("sDate")){ $("sDate").closest(".field").classList.add("invalid"); toast("תאריך לא תקין — DD/MM/YYYY"); return; }
+  if (!getDate("sDate")){ $("sDate").closest(".field").classList.add("invalid"); $("sDate").focus(); toast($("sDate").value ? "תאריך לא תקין — DD/MM/YYYY" : "בחר באיזה תאריך לחתום"); return; }
   const btn = $("btnSaveStamp"); btn.classList.add("busy");
   try{
     lift.show("שמירת החותמת", "מטביע חתימה וחותמת…");
