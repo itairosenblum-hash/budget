@@ -1106,7 +1106,7 @@ function renderLineDetail(l){
   const amt = Number(l.amount) || 0, u = lineUsage(l.id);
   const all = lineRows(l);
   const q = search.toLowerCase();
-  const rows = !q ? all : all.filter(r => [r.o.serial, r.o.tzadi, r.o.vehicle, r.o.unit, r.o.repairs, r.inv?.number].join(" ").toLowerCase().includes(q));
+  const rows = !q ? all : all.filter(r => [r.o.serial, r.o.tzadi, r.o.vehicle, r.o.unit, r.o.repairs, r.inv?.number, r.o.invNumber].join(" ").toLowerCase().includes(q));
   const head = ["סודר", "מספר צ'", "סוג הכלי", "יחידה", "תחילה", "סיום", 'שע"מ', "שריון", 'מחיר לפני מע"מ', 'מחיר כולל מע"מ', "יתרה", "חשבונית", "תאור התיקון"];
   return `
     <button class="back-btn" id="btnBackLines">→ כל הסעיפים</button>
@@ -1148,7 +1148,7 @@ function renderLineDetail(l){
           <td>${r.reserved ? `${fmtMoney(r.reserved)} ${statePill(r.o)}` : r.prices ? statePill(r.o) : `<span class="muted">—</span>`}</td>
           ${r.prices ? `<td class="${l.vatMode === "before" ? "" : "muted"}">${fmtMoney(r.prices.before)}</td><td class="${l.vatMode === "before" ? "muted" : ""}">${fmtMoney(r.prices.total)}</td>` : `<td class="muted">—</td><td class="muted">—</td>`}
           <td class="${r.balance < 0 ? "" : "muted"}" style="${r.balance < 0 ? "color:var(--danger);font-weight:800" : ""}">${fmtMoney(r.balance)}</td>
-          <td class="ltr">${r.inv ? `${escapeHtml(r.inv.number || "")} ${r.inv.stamped ? "✅" : "⏳"}` : ""}</td>
+          <td class="ltr">${r.inv ? `${escapeHtml(r.inv.number || "")} ${r.inv.stamped ? "✅" : "⏳"}` : escapeHtml(r.o.invNumber || "")}</td>
           <td class="desc">${escapeHtml(String(r.o.repairs || "").split("\n")[0])}</td>
         </tr>`).join("")}
       </tbody>
@@ -1170,7 +1170,7 @@ function exportLine(id){
     ...lineRows(l).map(r => [
       parseInt(r.o.serial) || r.o.serial || "", r.o.tzadi || "", r.o.vehicle || "", r.o.unit || "",
       fmtDateIL(r.o.date), fmtDateIL(r.o.endDate), r.o.hours ? (parseInt(r.o.hours) || r.o.hours) : "",
-      r.reserved || "", r.prices ? r.prices.before : "", r.prices ? r.prices.total : "", r.balance, r.inv?.number || "", r.o.repairs || ""]),
+      r.reserved || "", r.prices ? r.prices.before : "", r.prices ? r.prices.total : "", r.balance, r.inv?.number || r.o.invNumber || "", r.o.repairs || ""]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   // פסיק באלפים: שע"מ במספר שלם, סכומים עם ₪
@@ -1234,7 +1234,7 @@ function usageRows(l){
     out.push({ serial: r.o.serial || "", tzadi: r.o.tzadi || "", vehicle: r.o.vehicle || "", unit: r.o.unit || "",
       start: fmtDateIL(r.o.date), end: fmtDateIL(r.o.endDate), hours: r.o.hours ? (parseInt(String(r.o.hours).replace(/\D/g, "")) || r.o.hours) : "",
       state: USAGE_STATE[orderState(r.o)], reserved: r.reserved || 0, before: r.prices ? r.prices.before : null, total: r.prices ? r.prices.total : null,
-      balance: round2(bal), invoice: r.inv ? String(r.inv.number || "") : "", desc: String(r.o.repairs || "").split("\n")[0] });
+      balance: round2(bal), invoice: r.inv ? String(r.inv.number || "") : String(r.o.invNumber || ""), desc: String(r.o.repairs || "").split("\n")[0] });
   }
   const direct = state.invoices.filter(i => !isDeliveryNote(i) && !orderById(i.orderId) && i.budgetLineId === l.id)
     .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
