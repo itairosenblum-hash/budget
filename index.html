@@ -861,6 +861,18 @@ function maskDateIL(v){
 }
 function getDate(id){ return ilToISO($(id).value); }
 function setDate(id, iso){ $(id).value = iso ? fmtDateIL(iso) : ""; $(id).closest(".field")?.classList.remove("invalid"); }
+/* כמו בהזמנת מלון: אחרי שבוחרים תאריך התחלה, עוברים ישר לתאריך הסיום (לוח השנה נפתח מהתאריך שנבחר) */
+const DATE_PAIRS = { oDate: "oEnd", bOpen: "bValid" };
+function goToPairEnd(startId, openPicker){
+  const endId = DATE_PAIRS[startId]; if (!endId) return;
+  const end = $(endId), start = getDate(startId);
+  if (!openPicker){ end.focus(); return; }
+  const native = end.parentElement.querySelector('input[type=date]');
+  if (!native){ end.focus(); return; }
+  native.min = start || "";
+  native.value = getDate(endId) && (!start || getDate(endId) >= start) ? getDate(endId) : (start || todayISO());
+  setTimeout(() => { try{ native.showPicker(); }catch(e){ end.focus(); } }, 150);
+}
 function setupDateInputs(){
   document.querySelectorAll("input.date-il").forEach(el => {
     if (el.parentElement.classList.contains("date-wrap")) return;
@@ -870,15 +882,18 @@ function setupDateInputs(){
     const btn = document.createElement("button"); btn.type = "button"; btn.className = "cal-btn"; btn.textContent = "📅"; btn.setAttribute("aria-label", "בחירה מלוח השנה");
     wrap.append(native, btn);
     btn.onclick = () => {
-      native.value = getDate(el.id) || todayISO();
+      const startId = Object.keys(DATE_PAIRS).find(k => DATE_PAIRS[k] === el.id);
+      native.min = startId ? getDate(startId) : "";
+      native.value = getDate(el.id) || (startId && getDate(startId)) || todayISO();
       try{ native.showPicker(); }catch(e){ native.focus(); native.click(); }
     };
-    native.onchange = () => { if (native.value){ setDate(el.id, native.value); el.dispatchEvent(new Event("change")); } };
+    native.onchange = () => { if (native.value){ setDate(el.id, native.value); el.dispatchEvent(new Event("change")); goToPairEnd(el.id, true); } };
     // הקלדה: לוכסנים נוספים לבד (22102026 → 22/10/2026), גם אחרי שכבר נוסף לוכסן
     el.addEventListener("input", e => {
       if (e.inputType && e.inputType.startsWith("delete")) return;
       const v = el.value, m = maskDateIL(v);
       if (m !== v) el.value = m;
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(el.value) && ilToISO(el.value)) goToPairEnd(el.id, false);
     });
     el.addEventListener("blur", () => {
       const raw = el.value.trim();
@@ -1524,6 +1539,113 @@ async function budgetReportPdf(btn){
   finally{ btn?.classList.remove("busy"); }
 }
 
+/* ---------- דוח 1007 פתוחים (מרוכז, כל החברות בטבלה אחת) ----------
+   שורה פתוחה = אין לה עדיין חשבונית סגורה (משוריינת / בלי שריון / ממתינה לחתימה).
+   מסודר מהישנה לחדשה, כדי שהפערים הוותיקים יבלטו. */
+function openOrdersRows(){
+  const today = new Date(todayISO() + "T00:00:00");
+  return state.orders.filter(o => orderState(o) !== "done").map(o => {
+    const c = companyById(o.companyId), l = budgetById(o.budgetLineId), inv = invoiceForOrder(o.id);
+    const days = o.date ? Math.round((today - new Date(o.date + "T00:00:00")) / 864e5) : null;
+    const st = orderState(o) === "invoiced" ? "ממתין לחתימה" : orderReserved(o) ? "משוריין" : "ללא שריון";
+    return { o, company: c?.name || "—", line: l ? `${l.index || "—"} · ${l.orderNumber || ""}` : "לא שויך", days, st,
+      reserved: orderReserved(o) || 0, inv: inv?.number || "", flag: o.flag || "", desc: String(o.repairs || "").split("\n")[0] };
+  }).sort((a, b) => String(a.o.date || "9").localeCompare(String(b.o.date || "9")));
+}
+async function openOrdersReportPdf(btn){
+  const rows = openOrdersRows();
+  if (!rows.length){ toast("אין הזמנות 1007 פתוחות 👍"); return; }
+  btn?.classList.add("busy");
+  try{
+    const fontsP = Promise.all(["400", "700", "800"].map(w => document.fonts.load(`${w} 40px Heebo`))).catch(() => {});
+    const [{ PDFDocument }] = await Promise.all([loadPdfLib(), fontsP]);
+    const W = 842, H = 595, K = 3, M = 28, BOTTOM = H - 36;
+    const GREEN = "#4E6530", TINT = "#E7ECDB", INK = "#1F2418", SOFT = "#6B7360", LINE = "#D9D5C3", RED = "#B5533C", AMBER = "#8A6110", ORANGE = "#C46A00";
+    const produced = fmtDateIL(todayISO());
+    const defs = [["חברה", 86, "r"], ["סעיף · הזמנה", 92, "r"], ["סודר", 30, "c"], ["מספר צ'", 58, "r"], ["סוג הכלי", 70, "r"], ["יחידה", 48, "r"],
+      ["תחילה", 54, "c"], ["ימים פתוח", 44, "c"], ["מצב", 66, "c"], ["שריון", 62, "l"], ["חשבונית", 54, "r"], ["תאור התיקון / לטיפול", 150, "r"]];
+    const tw = defs.reduce((t, c) => t + c[1], 0), sc = (W - 2 * M) / tw;
+    let x = W - M; const COLS = defs.map(([t, w, a]) => { const c = { t, a, right: x, w: w * sc }; x -= c.w; return c; });
+    const pages = [];
+    const newPage = () => { const cv = document.createElement("canvas"); cv.width = W * K; cv.height = H * K;
+      const ctx = cv.getContext("2d"); ctx.scale(K, K); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H); ctx.direction = "rtl"; pages.push({ cv, ctx }); return ctx; };
+    const cell = (ctx, c, text, y, { bold = false, size = 8.8, color = INK } = {}) => {
+      ctx.font = `${bold ? 700 : 400} ${size}px Heebo`; ctx.fillStyle = color;
+      const t = fitText(ctx, String(text ?? ""), c.w - 6);
+      if (c.a === "r"){ ctx.textAlign = "right"; ctx.fillText(t, c.right - 3, y); }
+      else if (c.a === "l"){ ctx.textAlign = "left"; ctx.fillText(t, c.right - c.w + 3, y); }
+      else { ctx.textAlign = "center"; ctx.fillText(t, c.right - c.w / 2, y); }
+    };
+    const header = (ctx, cont) => {
+      ctx.fillStyle = GREEN; ctx.fillRect(0, 0, W, 58);
+      ctx.textAlign = "right"; ctx.fillStyle = "#fff"; ctx.font = `800 19px Heebo`;
+      ctx.fillText("דוח הזמנות 1007 פתוחות" + (cont ? " (המשך)" : ""), W - M, 28);
+      ctx.font = `400 10.5px Heebo`; ctx.fillText(`אחזקה צהר"מ · כל החברות · מהוותיקה לחדשה`, W - M, 46);
+      ctx.textAlign = "left"; ctx.font = `400 10px Heebo`; ctx.fillText(`הופק ${produced}`, M, 28);
+    };
+    const head = (ctx, y) => { ctx.fillStyle = TINT; ctx.fillRect(M, y, W - 2 * M, 20); COLS.forEach(c => cell(ctx, c, c.t, y + 13.5, { bold: true, size: 8.5, color: GREEN })); return y + 20; };
+    let ctx = newPage(); header(ctx, false);
+    // סיכום עליון
+    const totRes = rows.reduce((t, r) => t + r.reserved, 0);
+    const nOld = rows.filter(r => r.days != null && r.days > 30).length, nNoRes = rows.filter(r => r.st === "ללא שריון").length, nPend = rows.filter(r => r.st === "ממתין לחתימה").length;
+    const stats = [["הזמנות פתוחות", String(rows.length), INK], ["סה\"כ משוריין", fmtMoney(totRes), AMBER], ["פתוחות מעל 30 יום", String(nOld), nOld ? RED : INK], ["בלי שריון / ממתינות לחתימה", `${nNoRes} / ${nPend}`, ORANGE]];
+    const sw = (W - 2 * M - 30) / 4;
+    stats.forEach(([k, v, col], i) => { const sx = W - M - (i + 1) * sw - i * 10;
+      ctx.fillStyle = "#F6F4EC"; ctx.strokeStyle = LINE; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(sx, 70, sw, 46, 8) : ctx.rect(sx, 70, sw, 46); ctx.fill(); ctx.stroke();
+      ctx.textAlign = "right"; ctx.fillStyle = SOFT; ctx.font = `400 9.5px Heebo`; ctx.fillText(k, sx + sw - 10, 86);
+      ctx.fillStyle = col; ctx.font = `800 16px Heebo`; ctx.fillText(v, sx + sw - 10, 107); });
+    // פילוח לפי חברה בשורה אחת
+    const byCo = {}; rows.forEach(r => byCo[r.company] = (byCo[r.company] || 0) + 1);
+    ctx.textAlign = "right"; ctx.fillStyle = SOFT; ctx.font = `400 9.5px Heebo`;
+    ctx.fillText(fitText(ctx, "לפי חברה: " + Object.entries(byCo).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(" · "), W - 2 * M), W - M, 134);
+    let y = head(ctx, 144);
+    const ROW = 19;
+    rows.forEach((r, i) => {
+      if (y + ROW > BOTTOM){ ctx = newPage(); header(ctx, true); y = head(ctx, 70); }
+      if (i % 2){ ctx.fillStyle = "#FAF9F4"; ctx.fillRect(M, y, W - 2 * M, ROW); }
+      ctx.strokeStyle = LINE; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(M, y + ROW); ctx.lineTo(W - M, y + ROW); ctx.stroke();
+      const by = y + 13, o = r.o;
+      const vals = [r.company, r.line, o.serial || "", o.tzadi || "", o.vehicle || "", o.unit || "", fmtDateIL(o.date), r.days ?? "", r.st,
+        r.reserved ? fmtMoney(r.reserved) : "—", r.inv, r.flag ? `❗ ${r.flag}` : r.desc];
+      vals.forEach((v, j) => cell(ctx, COLS[j], v, by, {
+        bold: j === 0 || j === 7,
+        color: j === 7 && r.days > 30 ? RED : j === 8 ? (r.st === "משוריין" ? AMBER : r.st === "ללא שריון" ? ORANGE : SOFT) : j === 11 && r.flag ? RED : INK }));
+      y += ROW;
+    });
+    pages.forEach(({ ctx }, i) => {
+      ctx.strokeStyle = LINE; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(M, H - 26); ctx.lineTo(W - M, H - 26); ctx.stroke();
+      ctx.fillStyle = SOFT; ctx.font = `400 9px Heebo`;
+      ctx.textAlign = "right"; ctx.fillText(`תקציב אחזקה צהר"מ · 1007 פתוחות ${produced}`, W - M, H - 13);
+      ctx.textAlign = "left"; ctx.fillText(`עמוד ${i + 1} מתוך ${pages.length}`, M, H - 13);
+    });
+    const doc = await PDFDocument.create();
+    for (const { cv } of pages){
+      const blob = await new Promise(res => cv.toBlob(res, "image/jpeg", 0.9));
+      doc.addPage([W, H]).drawImage(await doc.embedJpg(await blob.arrayBuffer()), { x: 0, y: 0, width: W, height: H });
+      cv.width = cv.height = 0;
+    }
+    doc.setTitle("1007 פתוחות"); doc.setCreator("תקציב אחזקה צהר\"מ");
+    downloadBlob(new Blob([await doc.save()], { type: PDF_MIME }), `1007 פתוחות ${produced.replace(/\//g, "-")}.pdf`);
+    toast(`הדוח הופק ✓ (${rows.length} הזמנות פתוחות)`);
+  }catch(e){ console.error(e); toast("הפקת הדוח נכשלה: " + e.message); }
+  finally{ btn?.classList.remove("busy"); }
+}
+function openOrdersReportXlsx(){
+  if (typeof XLSX === "undefined"){ toast("ספריית האקסל לא נטענה (אין אינטרנט?)"); return; }
+  const rows = openOrdersRows();
+  if (!rows.length){ toast("אין הזמנות 1007 פתוחות 👍"); return; }
+  const aoa = [["חברה", "סעיף", "מס' הזמנה", "סודר", "מספר צ'", "סוג הכלי", "יחידה", "תחילה", "ימים פתוח", "מצב", "שריון", "חשבונית", "לטיפול", "תאור התיקון"]];
+  for (const r of rows){ const o = r.o, l = budgetById(o.budgetLineId);
+    aoa.push([r.company, l?.index || "", l?.orderNumber || o.number || "", o.serial || "", o.tzadi || "", o.vehicle || "", o.unit || "", fmtDateIL(o.date), r.days ?? "", r.st, r.reserved || "", r.inv, r.flag, r.desc]); }
+  aoa.push([]); aoa.push(['סה"כ', "", "", "", "", "", "", "", "", `${rows.length} פתוחות`, rows.reduce((t, r) => t + r.reserved, 0)]);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  for (let R = 1; R < aoa.length; R++){ const c = ws[XLSX.utils.encode_cell({ r: R, c: 10 })]; if (c && typeof c.v === "number") c.z = '"₪" #,##0.00'; }
+  ws["!cols"] = [16, 7, 13, 6, 10, 14, 9, 11, 9, 13, 12, 14, 24, 40].map(w => ({ wch: w }));
+  ws["!autofilter"] = { ref: `A1:N${rows.length + 1}` };
+  const wb = XLSX.utils.book_new(); wb.Workbook = { Views: [{ RTL: true }] };
+  XLSX.utils.book_append_sheet(wb, ws, "1007 פתוחות");
+  XLSX.writeFile(wb, `1007 פתוחות ${fmtDateIL(todayISO()).replace(/\//g, "-")}.xlsx`);
+}
 function budgetReportXlsx(){
   if (typeof XLSX === "undefined"){ toast("ספריית האקסל לא נטענה (אין אינטרנט?)"); return; }
   const groups = reportGroups();
@@ -3369,12 +3491,16 @@ function renderMenuSummary(){
     <div class="report-row" style="margin:0;">
       <button class="mini-btn pri" id="btnReportPdf">📄 דוח תקציבים PDF</button>
       <button class="mini-btn" id="btnReportXlsx">📊 דוח תקציבים Excel</button>
+      <button class="mini-btn pri" id="btnOpenPdf">📄 1007 פתוחים PDF</button>
+      <button class="mini-btn" id="btnOpenXlsx">📊 1007 פתוחים Excel</button>
     </div>
-    <div class="hint" style="margin-top:6px;">הסיכום והדוחות לפי הסינון שבמסך התקציב (פעילים / סגורים / הכל).</div>`;
+    <div class="hint" style="margin-top:6px;">הסיכום ודוח התקציבים לפי הסינון שבמסך התקציב. דוח ה-1007 הפתוחים — כל החברות בטבלה אחת, מהוותיקה לחדשה.</div>`;
 }
 $("menuSummary").addEventListener("click", e => {
   const rp = e.target.closest("#btnReportPdf"); if (rp) return budgetReportPdf(rp);
   if (e.target.closest("#btnReportXlsx")) return budgetReportXlsx();
+  const op = e.target.closest("#btnOpenPdf"); if (op) return openOrdersReportPdf(op);
+  if (e.target.closest("#btnOpenXlsx")) return openOrdersReportXlsx();
 });
 $("btnSettings").onclick = () => { $("settingsFold").open = false; renderMenuSummary(); renderSyncPanel(); openSheet("overlaySettings"); };
 $("syncStatusLine").onclick = () => { $("settingsFold").open = true; renderMenuSummary(); renderSyncPanel(); openSheet("overlaySettings"); };
