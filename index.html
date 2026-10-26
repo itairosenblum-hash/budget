@@ -296,6 +296,10 @@
   .r-acts{flex:none;display:flex;gap:4px;}
   .ic-btn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:10px;background:var(--card);font-size:16px;text-decoration:none;cursor:pointer;}
   .ic-btn[aria-disabled="true"]{opacity:.3;pointer-events:none;}
+  .menu-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .menu-stats div{background:var(--card-2);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;}
+  .menu-stats span{font-size:12.5px;color:var(--ink-soft);}
+  .menu-stats b{font-size:16px;}
   .flag-ic.open{background:#F08C00;}
   .flag-note{font-size:12px;color:#D93025;font-weight:700;margin-top:2px;white-space:normal;}
   .flag-field label{display:flex;align-items:center;gap:6px;}
@@ -392,7 +396,7 @@
           <div class="sub">צהר"מ · ניהול סעיפים, חשבוניות וספקים</div>
         </div>
       </div>
-      <button class="icon-btn" id="btnSettings" aria-label="הגדרות וסנכרון" title="הגדרות וסנכרון">
+      <button class="icon-btn" id="btnSettings" aria-label="תפריט" title="תפריט — סיכום, דוחות והגדרות">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
     </div>
@@ -594,7 +598,10 @@
 <div class="overlay" id="overlaySettings">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h2>הגדרות וסנכרון</h2>
+    <h2>תפריט</h2>
+    <div id="menuSummary"></div>
+    <div class="divider"></div>
+    <div class="field-group-title" style="margin-top:0;">הגדרות וסנכרון</div>
     <div id="syncPanel"></div>
     <div class="divider"></div>
     <details class="cfg" id="cfgDetails">
@@ -1032,26 +1039,7 @@ function renderBudget(){
   const reserved = usages.reduce((s, u) => s + u.reserved, 0);
   const free = total - spent - reserved;
 
-  const sumOpen = filt.sumOpen === "1";
-  let html = `
-    <div class="pass sum-fold ${sumOpen ? "open" : ""}">
-      <button class="sum-btn" data-filter="sumOpen" data-val="${sumOpen ? "0" : "1"}" aria-expanded="${sumOpen}">
-        <span class="co-chev">‹</span>
-        <span class="co-main"><span class="co-name">סיכום כל הסעיפים</span><span class="co-sub">${escapeHtml(budgetFilterLabel())} · ${lines.length} סעיפים</span></span>
-        <span class="co-nums"><span class="co-free tnum ${free < 0 ? "bad" : ""}">${fmtMoney(free)}</span><span class="co-sub tnum">פנוי מתוך ${fmtMoney(total)}</span></span>
-      </button>
-      ${sumOpen ? `
-      <div class="pass-top" style="padding-top:4px;">
-        ${barHtml(spent, reserved, total)}
-        <div class="legend"><span>נוצל בפועל</span><span class="r">משוריין ב-1007 פתוחות</span></div>
-      </div>
-      <div class="perf"></div>
-      <div class="pass-bottom">
-        <div class="stat"><div class="k">סך הזמנות המסגרת</div><div class="v tnum">${fmtMoney(total)}</div></div>
-        <div class="stat"><div class="k">נוצל בפועל</div><div class="v tnum">${fmtMoney(spent)}</div></div>
-        <div class="stat"><div class="k">משוריין</div><div class="v tnum warn">${fmtMoney(reserved)}</div></div>
-      </div>` : ""}
-    </div>`;
+  let html = "";
 
   const care = filt.needsCare === "1", expOnly = filt.expiring === "1";
   const nExp = lines.filter(lineExpiring).length;
@@ -1072,10 +1060,7 @@ function renderBudget(){
       <button class="care-btn exp ${expOnly ? "on" : ""}" data-filter="expiring" data-val="${expOnly ? "0" : "1"}">
         <span class="exp-ic">⏰</span><span>${expOnly ? "מוצגות רק הזמנות שתוקפן קרוב לפוג — הקש להצגת הכל" : "הצג רק הזמנות שתוקפן יפוג ב־3 החודשים הקרובים"}</span><span class="n tnum">${nExp}</span>
       </button>
-      <div class="report-row">
-        <button class="mini-btn pri" id="btnReportPdf">📄 דוח תקציבים PDF</button>
-        <button class="mini-btn" id="btnReportXlsx">📊 דוח תקציבים Excel</button>
-      </div>`;
+`;
   }
   html += `<div class="section-title"><span>תקציבים לפי חברה</span><span>${new Set(lines.map(l => l.companyId || "")).size} חברות · ${lines.length} סעיפים</span></div>`;
   if (!all.length){
@@ -3251,8 +3236,35 @@ $("view").addEventListener("click", e => {
 $("searchInput").addEventListener("input", e => { search = e.target.value.trim(); render(); });
 $("btnAdd").onclick = () => activeTab === "companies" ? openCompanyForm(null) : activeTab === "orders" ? openOrderForm(null)
   : activeTab === "invoices" ? openInvoiceForm(null) : openLineId ? openOrderForm(null, { budgetLineId: openLineId }) : openBudgetForm(null);
-$("btnSettings").onclick = () => { renderSyncPanel(); openSheet("overlaySettings"); };
-$("syncStatusLine").onclick = () => { renderSyncPanel(); openSheet("overlaySettings"); };
+function renderMenuSummary(){
+  const lines = filteredLines();
+  const total = lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
+  const us = lines.map(l => lineUsage(l.id));
+  const spent = us.reduce((s, u) => s + u.actual, 0), reserved = us.reduce((s, u) => s + u.reserved, 0);
+  const free = total - spent - reserved;
+  $("menuSummary").innerHTML = `
+    <div class="field-group-title" style="margin-top:0;">סיכום כל הסעיפים · ${escapeHtml(budgetFilterLabel())} · ${lines.length} סעיפים</div>
+    ${barHtml(spent, reserved, total, "margin:4px 0 6px;")}
+    <div class="legend" style="margin-bottom:10px;"><span>נוצל בפועל</span><span class="r">משוריין</span></div>
+    <div class="menu-stats">
+      <div><span>סך הזמנות המסגרת</span><b class="tnum">${fmtMoney(total)}</b></div>
+      <div><span>נוצל בפועל</span><b class="tnum">${fmtMoney(spent)}</b></div>
+      <div><span>משוריין</span><b class="tnum" style="color:var(--amber-ink)">${fmtMoney(reserved)}</b></div>
+      <div><span>פנוי</span><b class="tnum" style="color:${free < 0 ? "var(--danger)" : "var(--good)"}">${fmtMoney(free)}</b></div>
+    </div>
+    <div class="field-group-title">דוחות</div>
+    <div class="report-row" style="margin:0;">
+      <button class="mini-btn pri" id="btnReportPdf">📄 דוח תקציבים PDF</button>
+      <button class="mini-btn" id="btnReportXlsx">📊 דוח תקציבים Excel</button>
+    </div>
+    <div class="hint" style="margin-top:6px;">הסיכום והדוחות לפי הסינון שבמסך התקציב (שנה / פעילים).</div>`;
+}
+$("menuSummary").addEventListener("click", e => {
+  const rp = e.target.closest("#btnReportPdf"); if (rp) return budgetReportPdf(rp);
+  if (e.target.closest("#btnReportXlsx")) return budgetReportXlsx();
+});
+$("btnSettings").onclick = () => { renderMenuSummary(); renderSyncPanel(); openSheet("overlaySettings"); };
+$("syncStatusLine").onclick = () => { renderMenuSummary(); renderSyncPanel(); openSheet("overlaySettings"); };
 window.addEventListener("scroll", () => $("topbar").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
 document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".overlay.show").forEach(o => o.classList.remove("show")); });
 
