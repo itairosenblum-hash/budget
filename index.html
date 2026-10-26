@@ -262,6 +262,22 @@
   .stamp-stage .stamp-overlay:active{cursor:grabbing;}
   .date-wrap{position:relative;}
   .date-wrap input.date-il{padding-left:44px;}
+  .cal-ov{position:fixed;inset:0;z-index:80;background:rgba(21,25,18,.45);display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .15s;}
+  .cal-ov.show{opacity:1;pointer-events:auto;}
+  .cal-card{background:var(--card);border-radius:18px;padding:14px;width:100%;max-width:340px;box-shadow:0 10px 30px rgba(0,0,0,.25);}
+  .cal-hint{font-weight:800;font-size:14.5px;color:var(--pri-dark);text-align:center;margin-bottom:8px;}
+  .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+  .cal-nav b{font-size:16px;}
+  .cal-arrow{width:38px;height:38px;border-radius:50%;border:1px solid var(--border);background:var(--card-2);font-size:22px;line-height:1;cursor:pointer;color:var(--ink);}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;}
+  .cal-dow{font-size:12px;color:var(--ink-soft);font-weight:700;padding:4px 0;}
+  .cal-day{height:38px;border:0;background:none;border-radius:10px;font:inherit;font-size:15px;cursor:pointer;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .cal-day.today{box-shadow:inset 0 0 0 1.5px var(--pri);}
+  .cal-day.in{background:var(--pri-tint);border-radius:0;}
+  .cal-day.sel{background:var(--pri);color:#fff;font-weight:800;}
+  .cal-day:disabled{opacity:.3;cursor:default;}
+  .cal-foot{display:flex;gap:6px;margin-top:10px;}
+  .cal-foot .mini-btn{flex:1;justify-content:center;}
   .date-wrap .cal-btn{position:absolute;left:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;border:none;background:transparent;font-size:18px;cursor:pointer;border-radius:8px;}
   .date-wrap .cal-btn:hover{background:var(--card-2);}
   .date-wrap input[type=date]{position:absolute;left:6px;bottom:0;width:34px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;}
@@ -863,38 +879,87 @@ function maskDateIL(v){
 function getDate(id){ return ilToISO($(id).value); }
 function setDate(id, iso){ $(id).value = iso ? fmtDateIL(iso) : ""; $(id).closest(".field")?.classList.remove("invalid"); }
 /* כמו בהזמנת מלון: אחרי שבוחרים תאריך התחלה, עוברים ישר לתאריך הסיום (לוח השנה נפתח מהתאריך שנבחר) */
+/* לוח שנה של האתר (במקום לוח השנה של הדפדפן, שלא אפשר מעבר אוטומטי).
+   בזוג תאריכים (תחילה/סיום, ת.פ/תוקף) — כמו בהזמנת מלון: הקשה ראשונה = התחלה, השנייה = סיום, ואז נסגר. */
 const DATE_PAIRS = { oDate: "oEnd", bOpen: "bValid" };
-function goToPairEnd(startId, openPicker){
-  const endId = DATE_PAIRS[startId]; if (!endId) return;
-  const end = $(endId), start = getDate(startId);
-  if (!openPicker){ end.focus(); return; }
-  const native = end.parentElement.querySelector('input[type=date]');
-  if (!native){ end.focus(); return; }
-  native.min = start || "";
-  native.value = getDate(endId) && (!start || getDate(endId) >= start) ? getDate(endId) : (start || todayISO());
-  setTimeout(() => { try{ native.showPicker(); }catch(e){ end.focus(); } }, 150);
+const HE_DAYS = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
+const cal = { el: null, mode: "single", field: null, startId: null, endId: null, step: 0, start: "", end: "", view: null };
+function isoOf(d){ return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+function calEnsure(){
+  if (cal.el) return;
+  cal.el = document.createElement("div"); cal.el.className = "cal-ov";
+  cal.el.innerHTML = `<div class="cal-card" role="dialog" aria-modal="true"><div class="cal-hint" id="calHint"></div>
+    <div class="cal-nav"><button type="button" class="cal-arrow" data-cal-nav="-1" aria-label="חודש קודם">›</button><b id="calTitle"></b><button type="button" class="cal-arrow" data-cal-nav="1" aria-label="חודש הבא">‹</button></div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-foot"><button type="button" class="mini-btn" data-cal-today>היום</button><button type="button" class="mini-btn" data-cal-clear>ניקוי</button><button type="button" class="mini-btn pri" data-cal-close>סגירה</button></div></div>`;
+  document.body.appendChild(cal.el);
+  cal.el.addEventListener("click", e => {
+    if (e.target === cal.el || e.target.closest("[data-cal-close]")) return calClose();
+    const nv = e.target.closest("[data-cal-nav]"); if (nv){ cal.view.setMonth(cal.view.getMonth() + Number(nv.dataset.calNav)); return calRender(); }
+    if (e.target.closest("[data-cal-today]")) return calPick(todayISO());
+    if (e.target.closest("[data-cal-clear]")){
+      if (cal.mode === "range" && cal.step === 1){ setDate(cal.endId, ""); return calClose(); }
+      setDate(cal.mode === "range" ? cal.startId : cal.field, ""); if (cal.mode === "range"){ cal.start = ""; } return calClose();
+    }
+    const d = e.target.closest("[data-cal-day]"); if (d) calPick(d.dataset.calDay);
+  });
 }
+function calOpen(fieldId){
+  calEnsure();
+  const startId = DATE_PAIRS[fieldId] ? fieldId : Object.keys(DATE_PAIRS).find(k => DATE_PAIRS[k] === fieldId);
+  if (startId){
+    Object.assign(cal, { mode: "range", startId, endId: DATE_PAIRS[startId], start: getDate(startId), end: getDate(DATE_PAIRS[startId]) });
+    // מ📅 של שדה הסיום (כשיש כבר התחלה) — בוחרים רק סיום
+    cal.step = fieldId === cal.endId && cal.start ? 1 : 0;
+  } else Object.assign(cal, { mode: "single", field: fieldId, start: getDate(fieldId), end: "", step: 0 });
+  const base = (cal.step === 1 ? (cal.end || cal.start) : cal.start) || todayISO();
+  cal.view = new Date(base.slice(0, 7) + "-01T00:00:00");
+  calRender(); cal.el.classList.add("show");
+}
+function calClose(){ cal.el?.classList.remove("show"); }
+function calLabel(id){ return document.querySelector(`label[for="${id}"]`)?.textContent.trim() || ""; }
+function calRender(){
+  $("calTitle").textContent = `${HE_MONTHS[cal.view.getMonth()]} ${cal.view.getFullYear()}`;
+  $("calHint").textContent = cal.mode === "single" ? calLabel(cal.field)
+    : cal.step === 0 ? `1. בחר ${calLabel(cal.startId)}` : `2. בחר ${calLabel(cal.endId)}${cal.start ? ` (מ-${fmtDateIL(cal.start)})` : ""}`;
+  const first = new Date(cal.view), today = todayISO();
+  const pad = first.getDay(), days = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  let html = HE_DAYS.map(d => `<span class="cal-dow">${d}</span>`).join("") + "<span></span>".repeat(pad);
+  for (let i = 1; i <= days; i++){
+    const iso = isoOf(new Date(first.getFullYear(), first.getMonth(), i));
+    const sel = iso === cal.start || (cal.mode === "range" && iso === cal.end);
+    const inR = cal.mode === "range" && cal.start && cal.end && iso > cal.start && iso < cal.end;
+    const dis = cal.mode === "range" && cal.step === 1 && cal.start && iso < cal.start;
+    html += `<button type="button" class="cal-day ${sel ? "sel" : ""} ${inR ? "in" : ""} ${iso === today ? "today" : ""}" ${dis ? "disabled" : ""} data-cal-day="${iso}">${i}</button>`;
+  }
+  $("calGrid").innerHTML = html;
+}
+function calPick(iso){
+  if (cal.mode === "single"){ setDate(cal.field, iso); $(cal.field).dispatchEvent(new Event("change")); return calClose(); }
+  if (cal.step === 0){
+    cal.start = iso; setDate(cal.startId, iso); $(cal.startId).dispatchEvent(new Event("change"));
+    if (cal.end && cal.end < iso){ cal.end = ""; setDate(cal.endId, ""); }
+    cal.step = 1; return calRender();          // עובר מיד לבחירת הסיום
+  }
+  if (cal.start && iso < cal.start) return;
+  cal.end = iso; setDate(cal.endId, iso); $(cal.endId).dispatchEvent(new Event("change"));
+  calRender(); setTimeout(calClose, 180);
+}
+function goToPairEnd(startId){ const endId = DATE_PAIRS[startId]; if (endId) $(endId).focus(); }
 function setupDateInputs(){
   document.querySelectorAll("input.date-il").forEach(el => {
     if (el.parentElement.classList.contains("date-wrap")) return;
     const wrap = document.createElement("div"); wrap.className = "date-wrap";
     el.parentNode.insertBefore(wrap, el); wrap.appendChild(el);
-    const native = document.createElement("input"); native.type = "date"; native.tabIndex = -1; native.setAttribute("aria-hidden", "true");
     const btn = document.createElement("button"); btn.type = "button"; btn.className = "cal-btn"; btn.textContent = "📅"; btn.setAttribute("aria-label", "בחירה מלוח השנה");
-    wrap.append(native, btn);
-    btn.onclick = () => {
-      const startId = Object.keys(DATE_PAIRS).find(k => DATE_PAIRS[k] === el.id);
-      native.min = startId ? getDate(startId) : "";
-      native.value = getDate(el.id) || (startId && getDate(startId)) || todayISO();
-      try{ native.showPicker(); }catch(e){ native.focus(); native.click(); }
-    };
-    native.onchange = () => { if (native.value){ setDate(el.id, native.value); el.dispatchEvent(new Event("change")); goToPairEnd(el.id, true); } };
+    wrap.append(btn);
+    btn.onclick = () => calOpen(el.id);
     // הקלדה: לוכסנים נוספים לבד (22102026 → 22/10/2026), גם אחרי שכבר נוסף לוכסן
     el.addEventListener("input", e => {
       if (e.inputType && e.inputType.startsWith("delete")) return;
       const v = el.value, m = maskDateIL(v);
       if (m !== v) el.value = m;
-      if (/^\d{2}\/\d{2}\/\d{4}$/.test(el.value) && ilToISO(el.value)) goToPairEnd(el.id, false);
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(el.value) && ilToISO(el.value)) goToPairEnd(el.id);
     });
     el.addEventListener("blur", () => {
       const raw = el.value.trim();
