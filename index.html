@@ -318,6 +318,8 @@
   .ln-wrap .ln-row{border-bottom:0;}
   .ln-wrap.open{background:var(--card);}
   .ln-more{padding:0 12px 12px;}
+  .ln-btns{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:6px;margin-top:10px;}
+  .ln-btns .mini-btn{justify-content:center;padding:8px 4px;font-size:13.5px;white-space:nowrap;min-width:0;}
   .ln-row:hover{background:var(--card);}
   .ln-row.closed{opacity:.65;}
   .ln-idx{flex:none;min-width:30px;height:30px;padding:0 4px;border-radius:8px;background:var(--pri-tint);color:var(--pri-dark);font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;}
@@ -1154,8 +1156,8 @@ function renderBudget(){
           </div>
           <div class="co-sub" style="margin-top:6px;">${u.rows} שורות${u.open ? ` · ${u.open} משוריינות` : ""}${u.pending ? ` · ${u.pending} ממתינות לחתימה` : ""}${l.vatMode === "before" ? ` · יורד לפי מחיר לפני מע"מ` : ""}</div>
           ${l.notes ? `<div class="item-note" style="margin-top:8px;">${escapeHtml(l.notes)}</div>` : ""}
-          <div class="item-actions" style="margin-top:10px;">
-            <button class="mini-btn pri" data-open-line="${l.id}">📋 כניסה לסעיף וכל השורות</button>
+          <div class="ln-btns">
+            <button class="mini-btn pri" data-open-line="${l.id}">📋 כניסה לסעיף</button>
             <button class="mini-btn" data-new-row="${l.id}">➕ שורה</button>
             <button class="mini-btn" data-edit-budget="${l.id}">✏️ עריכה</button>
           </div>
