@@ -314,6 +314,10 @@
   .co-flag.bad{background:var(--danger-tint);color:var(--danger);}
   .co-lines{border-top:1px solid var(--border);background:var(--card-2);}
   .ln-row{display:flex;align-items:center;gap:10px;width:100%;border:0;border-bottom:1px solid var(--border);background:none;padding:10px 12px;font:inherit;color:inherit;text-align:right;cursor:pointer;}
+  .ln-wrap{border-bottom:1px solid var(--border);}
+  .ln-wrap .ln-row{border-bottom:0;}
+  .ln-wrap.open{background:var(--card);}
+  .ln-more{padding:0 12px 12px;}
   .ln-row:hover{background:var(--card);}
   .ln-row.closed{opacity:.65;}
   .ln-idx{flex:none;min-width:30px;height:30px;padding:0 4px;border-radius:8px;background:var(--pri-tint);color:var(--pri-dark);font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;}
@@ -725,6 +729,7 @@ const FILTERS_KEY = "tzahram_filters";
 const filt = Object.assign({ budgetYear: "all", budgetStatus: "active", ordersYear: "all", invoicesYear: "all" },
   (() => { try{ return JSON.parse(localStorage.getItem(FILTERS_KEY)) || {}; }catch(e){ return {}; } })());
 const OPEN_COS_KEY = "tzahram_open_cos";
+const openOrderRows = new Set(), openLns = new Set();
 const openCos = new Set((() => { try{ return JSON.parse(localStorage.getItem(OPEN_COS_KEY)) || []; }catch(e){ return []; } })());
 function saveOpenCos(){ try{ localStorage.setItem(OPEN_COS_KEY, JSON.stringify([...openCos])); }catch(e){} }
 function saveFilters(){ try{ localStorage.setItem(FILTERS_KEY, JSON.stringify(filt)); }catch(e){} }
@@ -1127,7 +1132,8 @@ function renderBudget(){
       ${isOpen ? `<div class="co-lines">${g.ls.map((l, k) => {
         const u = g.us[k], amt = Number(l.amount) || 0;
         return `
-        <button class="ln-row ${lineClosed(l) ? "closed" : ""}" data-open-line="${l.id}">
+        <div class="ln-wrap ${openLns.has(l.id) ? "open" : ""}">
+        <button class="ln-row ${lineClosed(l) ? "closed" : ""}" data-toggle-ln="${l.id}" aria-expanded="${openLns.has(l.id)}">
           <span class="ln-idx">${escapeHtml(l.index || "—")}</span>
           <span class="ln-main">
             <span class="ln-title">${flagCount([l]) ? `<span class="flag-ic" title="${flagCount([l])} שורות לטיפול">!</span> ` : ""}${openIcon(openCount([l]))}${expIcon([l])}${escapeHtml(l.title || (l.orderNumber ? `הזמנה ${l.orderNumber}` : "סעיף"))}</span>
@@ -1138,7 +1144,23 @@ function renderBudget(){
             <span class="ln-free tnum ${u.free < 0 ? "bad" : ""}">${fmtMoney(u.free)}</span>
             <span class="co-sub tnum">מתוך ${fmtMoney(amt)}</span>
           </span>
-        </button>`;
+        </button>
+        ${openLns.has(l.id) ? `<div class="ln-more">
+          <div class="meta-chips">${lineChips(l)}</div>
+          <div class="menu-stats" style="grid-template-columns:repeat(3,1fr);margin-top:8px;">
+            <div><span>נוצל בפועל</span><b class="tnum">${fmtMoney(u.actual)}</b></div>
+            <div><span>משוריין</span><b class="tnum" style="color:var(--amber-ink)">${fmtMoney(u.reserved)}</b></div>
+            <div><span>פנוי</span><b class="tnum" style="color:${u.free < 0 ? "var(--danger)" : "var(--good)"}">${fmtMoney(u.free)}</b></div>
+          </div>
+          <div class="co-sub" style="margin-top:6px;">${u.rows} שורות${u.open ? ` · ${u.open} משוריינות` : ""}${u.pending ? ` · ${u.pending} ממתינות לחתימה` : ""}${l.vatMode === "before" ? ` · יורד לפי מחיר לפני מע"מ` : ""}</div>
+          ${l.notes ? `<div class="item-note" style="margin-top:8px;">${escapeHtml(l.notes)}</div>` : ""}
+          <div class="item-actions" style="margin-top:10px;">
+            <button class="mini-btn pri" data-open-line="${l.id}">📋 כניסה לסעיף וכל השורות</button>
+            <button class="mini-btn" data-new-row="${l.id}">➕ שורה</button>
+            <button class="mini-btn" data-edit-budget="${l.id}">✏️ עריכה</button>
+          </div>
+        </div>` : ""}
+        </div>`;
       }).join("")}
         ${g.cid ? `<div class="ln-actions"><button class="mini-btn" data-new-order-for="${g.cid}">📄 הזמנה חדשה ל${escapeHtml(g.name)}</button></div>` : ""}
       </div>` : ""}
@@ -1724,7 +1746,7 @@ function budgetLabel(b){
   return [b.index ? `#${b.index}` : "", c?.name || b.title || "", b.orderNumber ? `הזמנה ${b.orderNumber}` : ""].filter(Boolean).join(" · ");
 }
 
-const openOrderRows = new Set();
+
 function orderRowHtml(o){
   const c = companyById(o.companyId), b = budgetById(o.budgetLineId);
   const inv = invoiceForOrder(o.id), dn = deliveryForOrder(o.id);
@@ -3224,6 +3246,7 @@ $("view").addEventListener("click", e => {
   if (f){ filt[f.dataset.filter] = f.dataset.val; saveFilters(); render(); return; }
   const rp = e.target.closest("#btnReportPdf"); if (rp) return budgetReportPdf(rp);
   if (e.target.closest("#btnReportXlsx")) return budgetReportXlsx();
+  const tln = e.target.closest("[data-toggle-ln]"); if (tln){ const k = tln.dataset.toggleLn; openLns.has(k) ? openLns.delete(k) : openLns.add(k); render(); return; }
   const tor = e.target.closest("[data-toggle-orow]"); if (tor){ const k = tor.dataset.toggleOrow; openOrderRows.has(k) ? openOrderRows.delete(k) : openOrderRows.add(k); render(); return; }
   const tc = e.target.closest("[data-toggle-co]"); if (tc){ const k = tc.dataset.toggleCo; openCos.has(k) ? openCos.delete(k) : openCos.add(k); saveOpenCos(); render(); return; }
   const ca = e.target.closest("[data-co-all]"); if (ca){ openCos.clear(); if (ca.dataset.coAll === "open") filteredLines().forEach(l => openCos.add(l.companyId && companyById(l.companyId) ? l.companyId : "_none")); saveOpenCos(); render(); return; }
