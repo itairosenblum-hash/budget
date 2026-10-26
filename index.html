@@ -274,6 +274,9 @@
   .care-btn span:nth-child(2){flex:1;}
   .care-btn .n{background:var(--card-2);border-radius:999px;padding:1px 9px;font-size:13px;}
   .care-btn.on{background:var(--amber-tint);border-color:#F08C00;color:var(--amber-ink);}
+  .exp-ic{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#E3EEFF;font-size:13px;line-height:1;vertical-align:-4px;flex:none;}
+  .exp-ic.past{background:var(--danger-tint);}
+  .care-btn.exp.on{background:#E3EEFF;border-color:#3B6FD8;color:#1D3A8A;}
   .flag-ic.open{background:#F08C00;}
   .flag-note{font-size:12px;color:#D93025;font-weight:700;margin-top:2px;white-space:normal;}
   .flag-field label{display:flex;align-items:center;gap:6px;}
@@ -970,11 +973,21 @@ function renderTabs(){
 
 }
 
+// הזמנה שתוקפה פג או יפוג בשלושת החודשים הקרובים (סעיפים סגורים לא נספרים)
+function expiryLimitISO(){ const d = new Date(todayISO() + "T00:00:00"); d.setMonth(d.getMonth() + 3); return d.toISOString().slice(0, 10); }
+function lineExpiring(l){ return !!l.validUntil && !lineClosed(l) && l.validUntil <= expiryLimitISO(); }
+function expIcon(ls){
+  const ex = ls.filter(lineExpiring); if (!ex.length) return "";
+  const first = ex.map(l => l.validUntil).sort()[0];
+  const past = first < todayISO();
+  return `<span class="exp-ic ${past ? "past" : ""}" title="${ex.length === 1 ? (past ? "פג תוקף" : "התוקף פג") + " " + fmtDateIL(first) : ex.length + " הזמנות שתוקפן קרוב לפוג (הקרובה: " + fmtDateIL(first) + ")"}">⏰</span> `;
+}
 function validityChip(l){
   if (!l.validUntil) return "";
   const days = Math.round((new Date(l.validUntil + "T00:00:00") - new Date(todayISO() + "T00:00:00")) / 864e5);
-  const cls = days < 0 ? "bad" : days <= 60 ? "warn" : "";
-  const txt = days < 0 ? "פג תוקף" : days <= 60 ? `בתוקף עוד ${days} ימים` : "בתוקף עד";
+  const soon = l.validUntil <= expiryLimitISO();
+  const cls = days < 0 ? "bad" : soon ? "warn" : "";
+  const txt = days < 0 ? "⏰ פג תוקף" : soon ? `⏰ בתוקף עוד ${days} ימים` : "בתוקף עד";
   return `<span class="meta-chip ${cls}">${txt} <b>${escapeHtml(fmtDateIL(l.validUntil))}</b></span>`;
 }
 function lineChips(l){
@@ -1021,11 +1034,13 @@ function renderBudget(){
       </div>` : ""}
     </div>`;
 
-  const care = filt.needsCare === "1";
+  const care = filt.needsCare === "1", expOnly = filt.expiring === "1";
+  const nExp = lines.filter(lineExpiring).length;
   const careRows = state.orders.filter(o => needsCare(o) && lines.some(l => l.id === o.budgetLineId)).length;
   const shown = lines.filter(l => !search || [l.index, l.orderNumber, l.requisition, l.title, l.notes, companyById(l.companyId)?.name]
     .join(" ").toLowerCase().includes(search.toLowerCase()))
-    .filter(l => !care || state.orders.some(o => o.budgetLineId === l.id && needsCare(o)));
+    .filter(l => !care || state.orders.some(o => o.budgetLineId === l.id && needsCare(o)))
+    .filter(l => !expOnly || lineExpiring(l));
   if (all.length){
     html += yearBarHtml + `
       <div class="seg" role="tablist">
@@ -1034,6 +1049,9 @@ function renderBudget(){
       </div>
       <button class="care-btn ${care ? "on" : ""}" data-filter="needsCare" data-val="${care ? "0" : "1"}">
         <span class="flag-ic open">!</span><span>${care ? "מוצגות רק שורות שדורשות טיפול — הקש להצגת הכל" : "הצג רק שורות פתוחות שדורשות טיפול"}</span><span class="n tnum">${careRows}</span>
+      </button>
+      <button class="care-btn exp ${expOnly ? "on" : ""}" data-filter="expiring" data-val="${expOnly ? "0" : "1"}">
+        <span class="exp-ic">⏰</span><span>${expOnly ? "מוצגות רק הזמנות שתוקפן קרוב לפוג — הקש להצגת הכל" : "הצג רק הזמנות שתוקפן יפוג ב־3 החודשים הקרובים"}</span><span class="n tnum">${nExp}</span>
       </button>
       <div class="report-row">
         <button class="mini-btn pri" id="btnReportPdf">📄 דוח תקציבים PDF</button>
@@ -1045,7 +1063,7 @@ function renderBudget(){
     return html + `<div class="empty"><div class="big">📊</div><p><b>עוד אין סעיפי תקציב</b></p><p>לוחצים על + כדי להוסיף הזמנת מסגרת (חברה, מספר הזמנה, סכום)</p></div>`;
   }
   if (!lines.length) return html + `<div class="empty"><p>אין סעיפים ${filt.budgetStatus === "closed" ? "סגורים" : filt.budgetStatus === "active" ? "פעילים" : ""} ב${escapeHtml(yearLabel(filt.budgetYear))}</p></div>`;
-  if (!shown.length) return html + `<div class="empty"><p>${care ? "אין שורות פתוחות שדורשות טיפול 👍" : "לא נמצאו סעיפים שמתאימים לחיפוש"}</p></div>`;
+  if (!shown.length) return html + `<div class="empty"><p>${care ? "אין שורות פתוחות שדורשות טיפול 👍" : expOnly ? "אין הזמנות שתוקפן יפוג ב־3 החודשים הקרובים 👍" : "לא נמצאו סעיפים שמתאימים לחיפוש"}</p></div>`;
   // תצוגה לפי חברות: שורה קומפקטית לכל חברה, הקשה פותחת את הסעיפים שלה
   const groups = new Map();
   for (const l of shown){
@@ -1064,7 +1082,7 @@ function renderBudget(){
   gs.sort((a, b) => (!a.cid) - (!b.cid) ||
     (sortKey === "free" ? a.free - b.free : sortKey === "amount" ? b.amt - a.amt : 0) ||
     a.name.localeCompare(b.name, "he"));
-  const allOpen = !!search || care;
+  const allOpen = !!search || care || expOnly;
   html += `<div class="co-tools">
       <span class="co-tools-lbl">מיון:</span>
       ${[["name", "א-ב"], ["free", "פנוי הכי מעט"], ["amount", "תקציב הכי גדול"]].map(([k, t]) =>
@@ -1075,7 +1093,7 @@ function renderBudget(){
   html += gs.map(g => {
     const isOpen = allOpen || openCos.has(g.cid || "_none");
     const nf = flagCount(g.ls);
-    const warn = (nf ? `<span class="flag-ic" title="${nf} שורות לטיפול">!</span> ` : "") + openIcon(openCount(g.ls)) + (g.free < 0 ? `<span class="co-flag bad">חריגה</span>` : g.pct >= .85 ? `<span class="co-flag">${Math.round(g.pct * 100)}%</span>` : "");
+    const warn = (nf ? `<span class="flag-ic" title="${nf} שורות לטיפול">!</span> ` : "") + openIcon(openCount(g.ls)) + expIcon(g.ls) + (g.free < 0 ? `<span class="co-flag bad">חריגה</span>` : g.pct >= .85 ? `<span class="co-flag">${Math.round(g.pct * 100)}%</span>` : "");
     const info = [`${g.ls.length} ${g.ls.length === 1 ? "סעיף" : "סעיפים"}`, g.open && `${g.open} פתוחות`, g.pend && `${g.pend} לחתימה`].filter(Boolean).join(" · ");
     return `
     <div class="co-row ${isOpen ? "open" : ""} ${g.ls.every(lineClosed) ? "closed" : ""}">
@@ -1097,7 +1115,7 @@ function renderBudget(){
         <button class="ln-row ${lineClosed(l) ? "closed" : ""}" data-open-line="${l.id}">
           <span class="ln-idx">${escapeHtml(l.index || "—")}</span>
           <span class="ln-main">
-            <span class="ln-title">${flagCount([l]) ? `<span class="flag-ic" title="${flagCount([l])} שורות לטיפול">!</span> ` : ""}${openIcon(openCount([l]))}${escapeHtml(l.title || (l.orderNumber ? `הזמנה ${l.orderNumber}` : "סעיף"))}</span>
+            <span class="ln-title">${flagCount([l]) ? `<span class="flag-ic" title="${flagCount([l])} שורות לטיפול">!</span> ` : ""}${openIcon(openCount([l]))}${expIcon([l])}${escapeHtml(l.title || (l.orderNumber ? `הזמנה ${l.orderNumber}` : "סעיף"))}</span>
             <span class="co-sub">${[lineYear(l) !== "none" ? lineYear(l) : "", l.orderNumber && l.title ? `הזמנה ${escapeHtml(l.orderNumber)}` : "", lineClosed(l) ? "🔒 סגור" : "", u.open ? `${u.open} פתוחות` : "", u.pending ? `${u.pending} לחתימה` : ""].filter(Boolean).join(" · ")}</span>
             ${barHtml(u.actual, u.reserved, amt, "height:4px;margin-top:6px;")}
           </span>
@@ -1138,7 +1156,7 @@ function renderLineDetail(l){
       <div class="sec-head">
         <div class="sec-idx">${escapeHtml(l.index || "—")}</div>
         <div style="min-width:0;flex:1;">
-          <div class="sec-title">${escapeHtml(c?.name || "חברה לא נבחרה")}</div>
+          <div class="sec-title">${expIcon([l])}${escapeHtml(c?.name || "חברה לא נבחרה")}</div>
           <div class="sec-sub">סכום ההזמנה ${fmtMoney(amt)}${l.title ? ` · ${escapeHtml(l.title)}` : ""}</div>
         </div>
         <div style="text-align:left;flex:none;"><div style="font-weight:900;font-size:19px;" class="tnum">${fmtMoney(u.free)}</div><div class="sec-sub">פנוי</div></div>
