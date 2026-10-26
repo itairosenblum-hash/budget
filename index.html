@@ -2125,7 +2125,10 @@ function openFileShareSheet({ title, fileName, shareName, mime, blobP, message, 
   // והנוסח מועתק ללוח כדי להדביק אותו ככיתוב אם רוצים.
   if (share) $("sendShare").onclick = e => withFile(e.currentTarget, async blob => {
     try{ navigator.clipboard?.writeText(message); }catch(err){}
-    await navigator.share({ files: [new File([blob], shareName || asciiFileName(fileName), { type: mime })] });
+    const file = new File([blob], shareName || asciiFileName(fileName), { type: mime });
+    // באנדרואיד וואטסאפ מצמיד את הטקסט לקובץ ככיתוב (הודעה אחת); במחשב/אייפון הוא מפצל — שם שולחים רק את הקובץ
+    if (/Android/i.test(navigator.userAgent)) await navigator.share({ files: [file], text: message });
+    else await navigator.share({ files: [file] });
   });
   $("sendWa").onclick = e => withFile(e.currentTarget, async blob => {
     downloadBlob(blob, fileName);
