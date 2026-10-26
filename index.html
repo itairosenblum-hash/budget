@@ -268,6 +268,12 @@
   .co-free{font-weight:900;font-size:17px;color:var(--good);}
   .co-free.bad,.ln-free.bad{color:var(--danger);}
   .flag-ic{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#D93025;color:#fff;font-weight:900;font-size:13px;line-height:1;vertical-align:-3px;flex:none;}
+  .sum-btn{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:14px 14px;font:inherit;color:inherit;text-align:right;cursor:pointer;}
+  .sum-fold.open .co-chev{transform:rotate(90deg);}
+  .care-btn{display:flex;align-items:center;gap:8px;width:100%;margin:10px 0 4px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--card);font:inherit;font-weight:700;font-size:14px;color:var(--ink);cursor:pointer;text-align:right;}
+  .care-btn span:nth-child(2){flex:1;}
+  .care-btn .n{background:var(--card-2);border-radius:999px;padding:1px 9px;font-size:13px;}
+  .care-btn.on{background:var(--amber-tint);border-color:#F08C00;color:var(--amber-ink);}
   .flag-ic.open{background:#F08C00;}
   .flag-note{font-size:12px;color:#D93025;font-weight:700;margin-top:2px;white-space:normal;}
   .flag-field label{display:flex;align-items:center;gap:6px;}
@@ -994,30 +1000,41 @@ function renderBudget(){
   const reserved = usages.reduce((s, u) => s + u.reserved, 0);
   const free = total - spent - reserved;
 
+  const sumOpen = filt.sumOpen === "1";
   let html = `
-    <div class="pass">
-      <div class="pass-top">
-        <div class="pass-eyebrow">סך הזמנות המסגרת · ${escapeHtml(budgetFilterLabel())}</div>
-        <div class="pass-total tnum">${fmtMoney(total)} <small>· ${lines.length} סעיפים</small></div>
-        ${barHtml(spent, reserved, total, "margin-top:12px;")}
+    <div class="pass sum-fold ${sumOpen ? "open" : ""}">
+      <button class="sum-btn" data-filter="sumOpen" data-val="${sumOpen ? "0" : "1"}" aria-expanded="${sumOpen}">
+        <span class="co-chev">‹</span>
+        <span class="co-main"><span class="co-name">סיכום כל הסעיפים</span><span class="co-sub">${escapeHtml(budgetFilterLabel())} · ${lines.length} סעיפים</span></span>
+        <span class="co-nums"><span class="co-free tnum ${free < 0 ? "bad" : ""}">${fmtMoney(free)}</span><span class="co-sub tnum">פנוי מתוך ${fmtMoney(total)}</span></span>
+      </button>
+      ${sumOpen ? `
+      <div class="pass-top" style="padding-top:4px;">
+        ${barHtml(spent, reserved, total)}
         <div class="legend"><span>נוצל בפועל</span><span class="r">משוריין ב-1007 פתוחות</span></div>
       </div>
       <div class="perf"></div>
       <div class="pass-bottom">
+        <div class="stat"><div class="k">סך הזמנות המסגרת</div><div class="v tnum">${fmtMoney(total)}</div></div>
         <div class="stat"><div class="k">נוצל בפועל</div><div class="v tnum">${fmtMoney(spent)}</div></div>
         <div class="stat"><div class="k">משוריין</div><div class="v tnum warn">${fmtMoney(reserved)}</div></div>
-        <div class="stat"><div class="k">פנוי</div><div class="v tnum ${free < 0 ? "bad" : "good"}">${fmtMoney(free)}</div></div>
-      </div>
+      </div>` : ""}
     </div>`;
 
+  const care = filt.needsCare === "1";
+  const careRows = state.orders.filter(o => needsCare(o) && lines.some(l => l.id === o.budgetLineId)).length;
   const shown = lines.filter(l => !search || [l.index, l.orderNumber, l.requisition, l.title, l.notes, companyById(l.companyId)?.name]
-    .join(" ").toLowerCase().includes(search.toLowerCase()));
+    .join(" ").toLowerCase().includes(search.toLowerCase()))
+    .filter(l => !care || state.orders.some(o => o.budgetLineId === l.id && needsCare(o)));
   if (all.length){
     html += yearBarHtml + `
       <div class="seg" role="tablist">
         ${[["active", "פעילים", nActive], ["closed", "סגורים", nClosed], ["all", "הכל", inYear.length]].map(([k, t, n]) =>
           `<button class="${filt.budgetStatus === k ? "active" : ""}" data-filter="budgetStatus" data-val="${k}">${t}<span class="n">${n}</span></button>`).join("")}
       </div>
+      <button class="care-btn ${care ? "on" : ""}" data-filter="needsCare" data-val="${care ? "0" : "1"}">
+        <span class="flag-ic open">!</span><span>${care ? "מוצגות רק שורות שדורשות טיפול — הקש להצגת הכל" : "הצג רק שורות פתוחות שדורשות טיפול"}</span><span class="n tnum">${careRows}</span>
+      </button>
       <div class="report-row">
         <button class="mini-btn pri" id="btnReportPdf">📄 דוח תקציבים PDF</button>
         <button class="mini-btn" id="btnReportXlsx">📊 דוח תקציבים Excel</button>
@@ -1028,7 +1045,7 @@ function renderBudget(){
     return html + `<div class="empty"><div class="big">📊</div><p><b>עוד אין סעיפי תקציב</b></p><p>לוחצים על + כדי להוסיף הזמנת מסגרת (חברה, מספר הזמנה, סכום)</p></div>`;
   }
   if (!lines.length) return html + `<div class="empty"><p>אין סעיפים ${filt.budgetStatus === "closed" ? "סגורים" : filt.budgetStatus === "active" ? "פעילים" : ""} ב${escapeHtml(yearLabel(filt.budgetYear))}</p></div>`;
-  if (!shown.length) return html + `<div class="empty"><p>לא נמצאו סעיפים שמתאימים לחיפוש</p></div>`;
+  if (!shown.length) return html + `<div class="empty"><p>${care ? "אין שורות פתוחות שדורשות טיפול 👍" : "לא נמצאו סעיפים שמתאימים לחיפוש"}</p></div>`;
   // תצוגה לפי חברות: שורה קומפקטית לכל חברה, הקשה פותחת את הסעיפים שלה
   const groups = new Map();
   for (const l of shown){
@@ -1047,7 +1064,7 @@ function renderBudget(){
   gs.sort((a, b) => (!a.cid) - (!b.cid) ||
     (sortKey === "free" ? a.free - b.free : sortKey === "amount" ? b.amt - a.amt : 0) ||
     a.name.localeCompare(b.name, "he"));
-  const allOpen = !!search;
+  const allOpen = !!search || care;
   html += `<div class="co-tools">
       <span class="co-tools-lbl">מיון:</span>
       ${[["name", "א-ב"], ["free", "פנוי הכי מעט"], ["amount", "תקציב הכי גדול"]].map(([k, t]) =>
@@ -1112,7 +1129,8 @@ function renderLineDetail(l){
   const amt = Number(l.amount) || 0, u = lineUsage(l.id);
   const all = lineRows(l);
   const q = search.toLowerCase();
-  const rows = !q ? all : all.filter(r => [r.o.serial, r.o.tzadi, r.o.vehicle, r.o.unit, r.o.repairs, r.inv?.number, r.o.invNumber].join(" ").toLowerCase().includes(q));
+  const careOn = filt.needsCare === "1";
+  const rows = (careOn ? all.filter(r => needsCare(r.o)) : all).filter(r => !q || [r.o.serial, r.o.tzadi, r.o.vehicle, r.o.unit, r.o.repairs, r.inv?.number, r.o.invNumber].join(" ").toLowerCase().includes(q));
   const head = ["סודר", "מספר צ'", "סוג הכלי", "יחידה", "תחילה", "סיום", 'שע"מ', "שריון", 'מחיר לפני מע"מ', 'מחיר כולל מע"מ', "יתרה", "חשבונית", "תאור התיקון"];
   return `
     <button class="back-btn" id="btnBackLines">→ כל הסעיפים</button>
@@ -1159,7 +1177,7 @@ function renderLineDetail(l){
         </tr>`).join("")}
       </tbody>
     </table></div>
-    ${rows.length < all.length ? `<p class="hint" style="margin-top:8px;">מוצגות ${rows.length} מתוך ${all.length} שורות לפי החיפוש</p>` : ""}`}`;
+    ${rows.length < all.length ? `<p class="hint" style="margin-top:8px;">מוצגות ${rows.length} מתוך ${all.length} שורות${careOn ? " — רק שורות שדורשות טיפול" : " לפי החיפוש"}${careOn ? ` <button class="mini-btn" data-filter="needsCare" data-val="0">הצג את כל השורות</button>` : ""}</p>` : ""}`}`;
 }
 
 function exportLine(id){
@@ -2161,6 +2179,7 @@ const fileGet = id => fileOp("readonly", s => s.get(id));
 const fileDel = id => fileOp("readwrite", s => s.delete(id));
 
 function orderById(id){ return state.orders.find(o => o.id === id); }
+function needsCare(o){ return !!o.flag || orderState(o) !== "done"; }
 function openCount(lines){ const ids = new Set(lines.map(l => l.id)); return state.orders.filter(o => ids.has(o.budgetLineId) && orderState(o) !== "done").length; }
 function openIcon(n){ return n ? `<span class="flag-ic open" title="${n} שורות פתוחות בלי חשבונית סגורה">!</span> ` : ""; }
 function flagCount(lines){ const ids = new Set(lines.map(l => l.id)); return state.orders.filter(o => o.flag && ids.has(o.budgetLineId)).length; }
