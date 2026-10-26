@@ -1576,7 +1576,6 @@ function renderCompanies(){
           <a class="ic-btn" ${wa ? `href="https://wa.me/${wa}" target="_blank" rel="noopener"` : `aria-disabled="true"`} title="וואטסאפ">💬</a>
           <a class="ic-btn" ${tel ? `href="tel:${escapeHtml(tel)}"` : `aria-disabled="true"`} title="חיוג">📞</a>
           <a class="ic-btn" ${c.email ? `href="mailto:${encodeURIComponent(c.email)}"` : `aria-disabled="true"`} title="מייל">✉️</a>
-          <button class="ic-btn" data-new-order-for="${c.id}" title="הזמנה חדשה">➕</button>
         </span>
       </div>
     </div>`;
