@@ -112,10 +112,10 @@
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
 
   /* ארבעה כפתורים בשתי שורות: חברות | תקציב / הזמנות 1007 | חשבוניות (מימין לשמאל) */
-  .tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 0 12px;border-bottom:1px dashed var(--border);}
-  .tab-chip{border:1px solid var(--border);background:var(--card);color:var(--ink-soft);border-radius:14px;padding:11px 12px;font-size:15.5px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;box-shadow:var(--shadow);}
+  .tabs{display:grid;grid-template-columns:repeat(3, 1fr);gap:8px;padding:12px 0 12px;border-bottom:1px dashed var(--border);}
+  .tab-chip{border:1px solid var(--border);background:var(--card);color:var(--ink-soft);border-radius:14px;padding:10px 6px;font-size:15px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;min-width:0;box-shadow:var(--shadow);}
+  @media (max-width: 420px){ .tab-chip .t-ic{display:none;} }
   .tab-chip > span:nth-child(2){white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  @media (min-width: 900px){ .tabs{grid-template-columns:repeat(4, 1fr);} }
   .tab-chip .count{font-size:12px;background:var(--card-2);border-radius:99px;padding:0 7px;}
   .tab-chip.active{background:var(--pri);border-color:var(--pri);color:#fff;}
   .tab-chip.active .count{background:rgba(255,255,255,.2);}
@@ -740,16 +740,17 @@ const DEFAULT_FIREBASE_CONFIG = {
   appId: "1:920210124583:web:54900018633a831e72c302"
 };
 
-// סדר הכפתורים (מימין לשמאל, שתי שורות): חברות | תקציב / הזמנות 1007 | חשבוניות
+// שלושה כפתורים בשורה אחת (מימין לשמאל): חברות | תקציב | 1007.
+// עמוד החשבוניות הוסר — חשבוניות מעלים, חותמים ושולחים מתוך שורת ה-1007.
 const TABS = [
-  { id: "companies", label: "חברות",       icon: "🏢" },
-  { id: "budget",    label: "תקציב",       icon: "📊" },
-  { id: "orders",    label: "הזמנות 1007", icon: "📄" },
-  { id: "invoices",  label: "חשבוניות",    icon: "🧾" },
+  { id: "companies", label: "חברות", icon: "🏢" },
+  { id: "budget",    label: "תקציב", icon: "📊" },
+  { id: "orders",    label: "1007",  icon: "📄" },
 ];
 
 let state = loadState();
 let activeTab = localStorage.getItem("tzahram_tab") || "budget";
+if (!TABS.some(t => t.id === activeTab)) activeTab = "budget";
 let search = "";
 let openLineId = null;   // סעיף שפתוח בתצוגת הטבלה
 
@@ -1036,7 +1037,7 @@ function renderTabs(){
   const counts = { budget: state.budgetLines.length, orders: state.orders.length, companies: state.companies.length, invoices: state.invoices.length };
   $("tabs").innerHTML = TABS.map(t => `
     <button class="tab-chip ${t.id === activeTab ? "active" : ""} ${t.soon ? "soon" : ""}" data-tab="${t.id}">
-      <span>${t.icon}</span><span>${t.label}</span>${t.soon ? "" : `<span class="count tnum">${counts[t.id]}</span>`}
+      <span class="t-ic">${t.icon}</span><span>${t.label}</span>${t.soon ? "" : `<span class="count tnum">${counts[t.id]}</span>`}
     </button>`).join("");
   $("searchInput").placeholder = activeTab === "companies" ? "🔍 חיפוש חברה, איש קשר או טלפון..."
     : activeTab === "orders" ? "🔍 חיפוש הזמנה לפי מספר, צ', חברה או כלי..."
