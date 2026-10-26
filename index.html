@@ -3638,7 +3638,7 @@ function renderMenuSummary(){
 $("menuSummary").addEventListener("click", e => {
   const rp = e.target.closest("#btnReportPdf"); if (rp) return budgetReportPdf(rp);
   if (e.target.closest("#btnReportXlsx")) return budgetReportXlsx();
-  const dp = e.target.closest("[data-design]");
+  const dp = e.target.closest(".dp[data-design]");
   if (dp){ const k = dp.dataset.design; if (k) document.documentElement.dataset.design = k; else delete document.documentElement.dataset.design;
     try{ localStorage.setItem("tzahram_design", k); }catch(err){} syncThemeColor(); renderMenuSummary(); return; }
   const op = e.target.closest("#btnOpenPdf"); if (op) return openOrdersReportPdf(op);
