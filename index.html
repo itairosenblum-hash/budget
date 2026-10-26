@@ -2093,14 +2093,23 @@ async function issue1007(id, btn){
 function canShareFiles(mime){
   try{ return !!(navigator.canShare && navigator.canShare({ files: [new File(["x"], "x.pdf", { type: mime })] })); }catch(e){ return false; }
 }
-function openFileShareSheet({ title, fileName, mime, blobP, message, subject, company, extra = "" }){
+/* שם קובץ לשיתוף: וואטסאפ במחשב משבש שמות קבצים בעברית, לכן בשיתוף שולחים שם באנגלית ומספרים */
+function asciiFileName(name){
+  const map = { "חשבונית": "Invoice", "חתומה": "signed", "הזמנה": "Order", "טופס": "Form" };
+  let n = String(name || "file.pdf");
+  for (const [he, en] of Object.entries(map)) n = n.split(he).join(en);
+  const ext = (n.match(/\.[A-Za-z0-9]+$/) || [".pdf"])[0];
+  n = n.slice(0, n.length - ext.length).replace(/[^A-Za-z0-9._-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+  return (n || "file") + ext;
+}
+function openFileShareSheet({ title, fileName, shareName, mime, blobP, message, subject, company, extra = "" }){
   const c = company || {};
   const wa = waNumber(c.mobile);
   const share = canShareFiles(mime);
   blobP.catch(() => {});
   $("sendTitle").textContent = title;
   $("sendBody").innerHTML = `
-    ${share ? `<button class="send-btn wa" id="sendShare" style="border-color:var(--pri);"><span class="ic">📤</span><span>שליחת הקובץ בוואטסאפ / מייל<small>נפתח תפריט השיתוף — בוחרים וואטסאפ, Gmail או Outlook, והקובץ כבר מצורף</small></span></button>`
+    ${share ? `<button class="send-btn wa" id="sendShare" style="border-color:var(--pri);"><span class="ic">📤</span><span>שליחת הקובץ בוואטסאפ / מייל<small>נשלחת הודעה אחת — רק הקובץ. נוסח ההודעה מועתק, ואם רוצים מדביקים אותו ככיתוב לקובץ</small></span></button>`
       : `<div class="item-note" style="margin-bottom:10px;">בדפדפן הזה אין תפריט שיתוף קבצים. לחיצה על וואטסאפ או מייל תוריד את הקובץ ותפתח את השיחה — ואז מצרפים אותו (📎).</div>`}
     <button class="send-btn" id="sendWa" ${wa ? "" : 'aria-disabled="true"'}><span class="ic">💬</span><span>וואטסאפ ל${escapeHtml(c.name || "חברה")}<small>${wa ? `<span dir="ltr">${escapeHtml(c.mobile)}</span> · הקובץ יורד ונפתחת השיחה — מצרפים אותו בצ'אט` : "אין נייד בכרטיס החברה"}</small></span></button>
     <button class="send-btn" id="sendMail" ${c.email ? "" : 'aria-disabled="true"'}><span class="ic">✉️</span><span>מייל ל${escapeHtml(c.name || "חברה")}<small>${c.email ? `<span dir="ltr">${escapeHtml(c.email)}</span> · הקובץ יורד ונפתח מייל — מצרפים אותו` : "אין אימייל בכרטיס החברה"}</small></span></button>
@@ -2112,8 +2121,12 @@ function openFileShareSheet({ title, fileName, mime, blobP, message, subject, co
     catch(e){ if (e?.name !== "AbortError"){ console.error(e); toast("השליחה נכשלה: " + e.message); } }
     finally{ btn.classList.remove("busy"); }
   };
-  if (share) $("sendShare").onclick = e => withFile(e.currentTarget, blob =>
-    navigator.share({ files: [new File([blob], fileName, { type: mime })], title: subject || fileName, text: message }));
+  // וואטסאפ שולח טקסט וקובץ כשתי הודעות נפרדות, לכן משתפים רק את הקובץ (הודעה אחת),
+  // והנוסח מועתק ללוח כדי להדביק אותו ככיתוב אם רוצים.
+  if (share) $("sendShare").onclick = e => withFile(e.currentTarget, async blob => {
+    try{ navigator.clipboard?.writeText(message); }catch(err){}
+    await navigator.share({ files: [new File([blob], shareName || asciiFileName(fileName), { type: mime })] });
+  });
   $("sendWa").onclick = e => withFile(e.currentTarget, async blob => {
     downloadBlob(blob, fileName);
     window.open(`https://wa.me/${wa}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
@@ -3136,6 +3149,7 @@ async function openInvoiceShare(id){
   openFileShareSheet({
     title: inv.stamped ? "שליחת החשבונית החתומה" : "שליחת החשבונית",
     fileName: name, mime: inv.stamped ? "application/pdf" : (inv.fileType || "application/pdf"),
+    shareName: asciiFileName(`Invoice_${inv.number || ""}${inv.stamped ? "_" + fmtDateIL(inv.stamped.date).replace(/\//g, "-") : ""}${(name.match(/\.[A-Za-z0-9]+$/) || [".pdf"])[0]}`),
     blobP, message: invoiceMessage(inv), subject: `חשבונית ${inv.number || ""}`.trim(),
     company: companyById(inv.companyId) || {},
   });
