@@ -371,7 +371,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">24/10/2026 20:30</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">26/10/2026 13:10</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -576,7 +576,7 @@
     <div class="divider"></div>
     <div class="sheet-actions" style="margin-top:0;">
       <button class="btn-ghost" style="flex:1" id="btnExport">גיבוי לקובץ JSON</button>
-      <label class="btn-ghost" style="flex:1;text-align:center;">שחזור מגיבוי<input type="file" id="importInput" accept="application/json" hidden></label>
+      <label class="btn-ghost" style="flex:1;text-align:center;">שחזור / ייבוא שורות<input type="file" id="importInput" accept="application/json,.json" hidden></label>
     </div>
     <button class="btn-ghost" style="width:100%;margin-top:16px;" data-close>סגירה</button>
   </div>
@@ -3156,6 +3156,52 @@ $("syncStatusLine").onclick = () => { renderSyncPanel(); openSheet("overlaySetti
 window.addEventListener("scroll", () => $("topbar").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
 document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".overlay.show").forEach(o => o.classList.remove("show")); });
 
+/* ---------- ייבוא שורות מקובץ (למשל דף מודפס שהוקלד) ----------
+   מבנה: { importRows: [ { section: { orderNumber, company, title, index, amount, openDate, requisition, validUntil, year },
+                             rows: [ { serial, tzadi, vehicle, unit, date, endDate, hours, price, reserve, invoice, repairs } ] } ] }
+   הסעיף נמצא לפי מספר ההזמנה (ואם אין — נוצר), החברה לפי שם (ואם אין — נוצרת).
+   שורה שכבר קיימת בסעיף (אותו סודר) מדולגת, כך שאפשר לייבא שוב את אותו קובץ בלי כפילויות.
+   price = ניצול בפועל (לפי הגדרת המע"מ של הסעיף), reserve = שריון לשורה פתוחה. */
+function importRowsFile(groups){
+  const norm = s => String(s || "").replace(/["'״׳\s.,-]/g, "").replace(/בעמ$/, "").toLowerCase();
+  let addedRows = 0, skipped = 0, newLines = 0, newCos = 0;
+  for (const g of groups){
+    const sec = g.section || {};
+    let line = state.budgetLines.find(b => String(b.orderNumber || "").trim() === String(sec.orderNumber || "").trim() && sec.orderNumber);
+    let companyId = line?.companyId || "";
+    if (!companyId && sec.company){
+      const n = norm(sec.company);
+      let c = state.companies.find(c => norm(c.name) === n) || state.companies.find(c => n && norm(c.name) && (norm(c.name).includes(n) || n.includes(norm(c.name))));
+      if (!c){ c = { id: uid(), name: sec.company, _u: now() }; state.companies.push(c); newCos++; }
+      companyId = c.id;
+    }
+    if (!line){
+      line = { id: uid(), index: String(sec.index || ""), companyId, orderNumber: String(sec.orderNumber || ""), requisition: String(sec.requisition || ""),
+        amount: Number(sec.amount) || 0, openDate: sec.openDate || "", validUntil: sec.validUntil || "", vatMode: sec.vatMode || "total",
+        year: sec.year ? String(sec.year) : "", closed: false, title: sec.title || "", notes: "", _u: now() };
+      state.budgetLines.push(line); newLines++;
+    }
+    const before = line.vatMode === "before";
+    for (const r of g.rows || []){
+      const serial = String(r.serial ?? "").trim();
+      if (serial && state.orders.some(o => o.budgetLineId === line.id && String(o.serial || "").trim() === serial)){ skipped++; continue; }
+      const price = r.price === "" || r.price == null ? null : Number(r.price);
+      state.orders.push({
+        id: uid(), companyId: line.companyId || companyId, budgetLineId: line.id,
+        date: r.date || "", endDate: r.endDate || "", number: line.orderNumber || "", serial,
+        tzadi: String(r.tzadi || ""), vehicle: r.vehicle || "", hours: r.hours == null ? "" : String(r.hours), unit: r.unit || "",
+        repairs: r.repairs || "", details: r.invoice ? `חשבונית ${r.invoice}` : (r.details || ""),
+        reserve: r.reserve == null || r.reserve === "" ? null : Number(r.reserve),
+        priceBefore: price != null && before ? price : null, priceTotal: price != null && !before ? price : null, price: null,
+        imported: true, _u: now(),
+      });
+      addedRows++;
+    }
+  }
+  saveState(); render();
+  toast(`יובאו ${addedRows} שורות` + (skipped ? ` · ${skipped} כבר היו` : "") + (newLines ? ` · ${newLines} סעיפים חדשים` : "") + (newCos ? ` · ${newCos} חברות חדשות` : ""));
+}
+
 /* ---------- backup ---------- */
 $("btnExport").onclick = () => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
@@ -3168,6 +3214,7 @@ $("importInput").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   try{
     const data = JSON.parse(await f.text());
+    if (Array.isArray(data.importRows)){ importRowsFile(data.importRows); e.target.value = ""; return; }
     state = mergeStates(state, migrateState(Object.assign(defaultState(), data)));
     saveState(); render(); toast("הגיבוי מוזג ✓");
   }catch(err){ toast("הקובץ לא תקין"); }
