@@ -1698,8 +1698,8 @@ async function openOrdersReportPdf(btn){
     const W = 842, H = 595, K = 3, M = 28, BOTTOM = H - 36;
     const GREEN = "#4E6530", TINT = "#E7ECDB", INK = "#1F2418", SOFT = "#6B7360", LINE = "#D9D5C3", RED = "#B5533C", AMBER = "#8A6110", ORANGE = "#C46A00";
     const produced = fmtDateIL(todayISO());
-    const defs = [["חברה", 86, "r"], ["סעיף · הזמנה", 92, "r"], ["סודר", 30, "c"], ["מספר צ'", 58, "r"], ["סוג הכלי", 70, "r"], ["יחידה", 48, "r"],
-      ["תחילה", 54, "c"], ["ימים פתוח", 44, "c"], ["מצב", 66, "c"], ["שריון", 62, "l"], ["חשבונית", 54, "r"], ["תאור התיקון / לטיפול", 150, "r"]];
+    const defs = [["חברה", 86, "r"], ["סעיף · הזמנה", 92, "r"], ["סודר", 30, "c"], ["מספר צ'", 58, "r"], ["סוג הכלי", 70, "r"], ["יחידה", 50, "r"],
+      ["תאריך פתיחה", 66, "c"], ["ימים פתוח", 46, "c"], ["מצב", 66, "c"], ["שריון", 64, "l"], ["תאור התיקון / לטיפול", 176, "r"]];
     const tw = defs.reduce((t, c) => t + c[1], 0), sc = (W - 2 * M) / tw;
     let x = W - M; const COLS = defs.map(([t, w, a]) => { const c = { t, a, right: x, w: w * sc }; x -= c.w; return c; });
     const pages = [];
@@ -1742,10 +1742,10 @@ async function openOrdersReportPdf(btn){
       ctx.strokeStyle = LINE; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(M, y + ROW); ctx.lineTo(W - M, y + ROW); ctx.stroke();
       const by = y + 13, o = r.o;
       const vals = [r.company, r.line, o.serial || "", o.tzadi || "", o.vehicle || "", o.unit || "", fmtDateIL(o.date), r.days ?? "", r.st,
-        r.reserved ? fmtMoney(r.reserved) : "—", r.inv, r.flag ? `❗ ${r.flag}` : r.desc];
+        r.reserved ? fmtMoney(r.reserved) : "—", r.flag ? `❗ ${r.flag}` : r.desc];
       vals.forEach((v, j) => cell(ctx, COLS[j], v, by, {
         bold: j === 0 || j === 7,
-        color: j === 7 && r.days > 30 ? RED : j === 8 ? (r.st === "משוריין" ? AMBER : r.st === "ללא שריון" ? ORANGE : SOFT) : j === 11 && r.flag ? RED : INK }));
+        color: j === 7 && r.days > 30 ? RED : j === 8 ? (r.st === "משוריין" ? AMBER : r.st === "ללא שריון" ? ORANGE : SOFT) : j === 10 && r.flag ? RED : INK }));
       y += ROW;
     });
     pages.forEach(({ ctx }, i) => {
@@ -1770,14 +1770,14 @@ function openOrdersReportXlsx(){
   if (typeof XLSX === "undefined"){ toast("ספריית האקסל לא נטענה (אין אינטרנט?)"); return; }
   const rows = openOrdersRows();
   if (!rows.length){ toast("אין הזמנות 1007 פתוחות 👍"); return; }
-  const aoa = [["חברה", "סעיף", "מס' הזמנה", "סודר", "מספר צ'", "סוג הכלי", "יחידה", "תחילה", "ימים פתוח", "מצב", "שריון", "חשבונית", "לטיפול", "תאור התיקון"]];
+  const aoa = [["חברה", "סעיף", "מס' הזמנה", "סודר", "מספר צ'", "סוג הכלי", "יחידה", "תאריך פתיחה", "ימים פתוח", "מצב", "שריון", "לטיפול", "תאור התיקון"]];
   for (const r of rows){ const o = r.o, l = budgetById(o.budgetLineId);
-    aoa.push([r.company, l?.index || "", l?.orderNumber || o.number || "", o.serial || "", o.tzadi || "", o.vehicle || "", o.unit || "", fmtDateIL(o.date), r.days ?? "", r.st, r.reserved || "", r.inv, r.flag, r.desc]); }
+    aoa.push([r.company, l?.index || "", l?.orderNumber || o.number || "", o.serial || "", o.tzadi || "", o.vehicle || "", o.unit || "", fmtDateIL(o.date), r.days ?? "", r.st, r.reserved || "", r.flag, r.desc]); }
   aoa.push([]); aoa.push(['סה"כ', "", "", "", "", "", "", "", "", `${rows.length} פתוחות`, rows.reduce((t, r) => t + r.reserved, 0)]);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   for (let R = 1; R < aoa.length; R++){ const c = ws[XLSX.utils.encode_cell({ r: R, c: 10 })]; if (c && typeof c.v === "number") c.z = '"₪" #,##0.00'; }
-  ws["!cols"] = [16, 7, 13, 6, 10, 14, 9, 11, 9, 13, 12, 14, 24, 40].map(w => ({ wch: w }));
-  ws["!autofilter"] = { ref: `A1:N${rows.length + 1}` };
+  ws["!cols"] = [16, 7, 13, 6, 10, 14, 9, 12, 9, 13, 12, 24, 40].map(w => ({ wch: w }));
+  ws["!autofilter"] = { ref: `A1:M${rows.length + 1}` };
   const wb = XLSX.utils.book_new(); wb.Workbook = { Views: [{ RTL: true }] };
   XLSX.utils.book_append_sheet(wb, ws, "1007 פתוחות");
   XLSX.writeFile(wb, `1007 פתוחות ${fmtDateIL(todayISO()).replace(/\//g, "-")}.xlsx`);
