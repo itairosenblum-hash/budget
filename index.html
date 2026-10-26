@@ -277,6 +277,25 @@
   .exp-ic{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#E3EEFF;font-size:13px;line-height:1;vertical-align:-4px;flex:none;}
   .exp-ic.past{background:var(--danger-tint);}
   .care-btn.exp.on{background:#E3EEFF;border-color:#3B6FD8;color:#1D3A8A;}
+  .r-grp{margin-top:12px;}
+  .r-grp-head{display:flex;justify-content:space-between;gap:8px;font-weight:800;font-size:14px;color:var(--ink-soft);padding:0 4px 6px;}
+  .r-list{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;}
+  .r-row{border-bottom:1px solid var(--border);}
+  .r-row:last-child{border-bottom:0;}
+  .r-main{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:10px 12px;font:inherit;color:inherit;text-align:right;cursor:pointer;min-width:0;}
+  .r-row.open{background:var(--card-2);}
+  .r-ic{flex:none;display:flex;gap:3px;}
+  .r-ic:empty{display:none;}
+  .r-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .r-link{border:0;background:none;padding:0;font:inherit;color:inherit;text-align:right;cursor:pointer;}
+  .r-title{font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .r-sub{font-size:12.5px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .r-end{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:3px;}
+  .r-amt{font-weight:800;font-size:14.5px;}
+  .r-more{padding:0 12px 12px;}
+  .r-acts{flex:none;display:flex;gap:4px;}
+  .ic-btn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:10px;background:var(--card);font-size:16px;text-decoration:none;cursor:pointer;}
+  .ic-btn[aria-disabled="true"]{opacity:.3;pointer-events:none;}
   .flag-ic.open{background:#F08C00;}
   .flag-note{font-size:12px;color:#D93025;font-weight:700;margin-top:2px;white-space:normal;}
   .flag-field label{display:flex;align-items:center;gap:6px;}
@@ -1519,36 +1538,28 @@ function budgetReportXlsx(){
 function renderCompanies(){
   const list = [...state.companies].sort((a, b) => String(a.name).localeCompare(String(b.name), "he"));
   const shown = list.filter(c => matches(c, ["name", "contact", "email", "phone", "mobile", "hp"]));
-  let html = `<div class="section-title" style="margin-top:6px;"><span>כרטיסיות חברות</span><span>${list.length}</span></div>`;
+  let html = `<div class="section-title" style="margin-top:6px;"><span>חברות</span><span>${list.length}</span></div>`;
   if (!list.length){
     return html + `<div class="empty"><div class="big">🏢</div><p><b>עוד אין חברות</b></p><p>לוחצים על + כדי להוסיף ספק</p></div>`;
   }
   if (!shown.length) return html + `<div class="empty"><p>לא נמצאו חברות שמתאימות לחיפוש</p></div>`;
-  return html + `<div class="cards">` + shown.map(c => {
-    const wa = waNumber(c.mobile);
-    const lines = [
-      c.contact && ["איש קשר", escapeHtml(c.contact), false],
-      c.email && ["אימייל", escapeHtml(c.email), true],
-      c.phone && ["טלפון", escapeHtml(c.phone), true],
-      c.mobile && ["נייד", escapeHtml(c.mobile), true],
-    ].filter(Boolean);
+  return html + `<div class="r-list">` + shown.map(c => {
+    const wa = waNumber(c.mobile), tel = String(c.phone || c.mobile || "").replace(/[^\d+]/g, "");
+    const sub = [c.contact && escapeHtml(c.contact), c.mobile && `<span dir="ltr">${escapeHtml(c.mobile)}</span>`, !c.mobile && c.phone && `<span dir="ltr">${escapeHtml(c.phone)}</span>`].filter(Boolean).join(" · ");
+    const nLines = state.budgetLines.filter(l => l.companyId === c.id).length;
     return `
-    <div class="item-card">
-      <div class="item-top" style="justify-content:flex-start;">
-        <div class="avatar">${escapeHtml(initials(c.name))}</div>
-        <div style="min-width:0;">
-          <div class="item-title">${escapeHtml(c.name || "ללא שם")}</div>
-          ${c.hp ? `<div class="item-sub">ח.פ <span dir="ltr">${escapeHtml(c.hp)}</span></div>` : ""}
-        </div>
-      </div>
-      ${lines.length ? `<div class="contact-lines">${lines.map(([k, v, ltr]) => `<div><span class="lbl">${k}</span><span class="${ltr ? "val" : ""}">${v}</span></div>`).join("")}</div>` : ""}
-      ${c.notes ? `<div class="item-note">${escapeHtml(c.notes)}</div>` : ""}
-      <div class="item-actions">
-        <a class="mini-btn wa" ${wa ? `href="https://wa.me/${wa}" target="_blank" rel="noopener"` : `aria-disabled="true"`}>💬 וואטסאפ</a>
-        <a class="mini-btn" ${c.email ? `href="mailto:${encodeURIComponent(c.email)}"` : `aria-disabled="true"`}>✉️ מייל</a>
-        <a class="mini-btn" ${(c.phone || c.mobile) ? `href="tel:${escapeHtml(String(c.phone || c.mobile).replace(/[^\d+]/g, ""))}"` : `aria-disabled="true"`}>📞 חיוג</a>
-        <button class="mini-btn pri" data-new-order-for="${c.id}">📄 הזמנה</button>
-        <button class="mini-btn" data-edit-company="${c.id}">✏️ עריכה</button>
+    <div class="r-row">
+      <div class="r-main" style="cursor:default;">
+        <button class="r-txt r-link" data-edit-company="${c.id}">
+          <span class="r-title">${escapeHtml(c.name || "ללא שם")}</span>
+          <span class="r-sub">${sub || "אין פרטי קשר"}${nLines ? ` · ${nLines} ${nLines === 1 ? "סעיף" : "סעיפים"}` : ""}</span>
+        </button>
+        <span class="r-acts">
+          <a class="ic-btn" ${wa ? `href="https://wa.me/${wa}" target="_blank" rel="noopener"` : `aria-disabled="true"`} title="וואטסאפ">💬</a>
+          <a class="ic-btn" ${tel ? `href="tel:${escapeHtml(tel)}"` : `aria-disabled="true"`} title="חיוג">📞</a>
+          <a class="ic-btn" ${c.email ? `href="mailto:${encodeURIComponent(c.email)}"` : `aria-disabled="true"`} title="מייל">✉️</a>
+          <button class="ic-btn" data-new-order-for="${c.id}" title="הזמנה חדשה">➕</button>
+        </span>
       </div>
     </div>`;
   }).join("") + `</div>`;
@@ -1712,56 +1723,79 @@ function budgetLabel(b){
   return [b.index ? `#${b.index}` : "", c?.name || b.title || "", b.orderNumber ? `הזמנה ${b.orderNumber}` : ""].filter(Boolean).join(" · ");
 }
 
+const openOrderRows = new Set();
+function orderRowHtml(o){
+  const c = companyById(o.companyId), b = budgetById(o.budgetLineId);
+  const inv = invoiceForOrder(o.id), dn = deliveryForOrder(o.id);
+  const amt = orderPrices(o)?.total || orderReserved(o);
+  const open = openOrderRows.has(o.id);
+  const sub = [o.date && escapeHtml(fmtDateIL(o.date)), o.tzadi && `צ' <span dir="ltr">${escapeHtml(o.tzadi)}</span>`, o.vehicle && escapeHtml(o.vehicle), o.unit && escapeHtml(o.unit)].filter(Boolean).join(" · ");
+  return `
+    <div class="r-row ${open ? "open" : ""}">
+      <button class="r-main" data-toggle-orow="${o.id}">
+        <span class="r-ic">${o.flag ? `<span class="flag-ic" title="${escapeHtml(o.flag)}">!</span>` : ""}${orderState(o) !== "done" ? openIcon(1) : ""}</span>
+        <span class="r-txt">
+          <span class="r-title">${escapeHtml(String(o.repairs || "ללא תיאור").split("\n")[0])}</span>
+          <span class="r-sub">${sub}</span>
+        </span>
+        <span class="r-end">
+          <span class="r-amt tnum">${amt ? fmtMoney(amt) : "—"}</span>
+          ${statePill(o)}
+        </span>
+      </button>
+      ${open ? `<div class="r-more">
+        <div class="kv">${[
+          ["הזמנה", `${escapeHtml(o.number || "—")}${o.serial ? ` · סודר ${escapeHtml(o.serial)}` : ""}`],
+          ["סעיף", b ? escapeHtml(budgetLabel(b)) : "לא שויך"],
+          o.hours && ['שע"מ', escapeHtml(fmtInt(o.hours))],
+          o.endDate && ["סיום", escapeHtml(fmtDateIL(o.endDate))],
+          inv && ["חשבונית", `🧾 ${escapeHtml(inv.number || "")} · ${fmtMoney(inv.total)}`],
+          !inv && o.invNumber && ["חשבונית", escapeHtml(o.invNumber)],
+          dn && ["תעודת משלוח", `📦 ${escapeHtml(dn.number || "")} · ${fmtMoney(dn.total)}`],
+          o.flag && ["לטיפול", `<b style="color:#D93025">${escapeHtml(o.flag)}</b>`],
+        ].filter(Boolean).map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
+        <div class="item-actions">
+          ${inv ? `<button class="mini-btn pri" data-edit-invoice="${inv.id}">🧾 החשבונית</button>` : `<button class="mini-btn pri" data-inv-for-order="${o.id}">🧾 העלאת חשבונית</button>`}
+          <button class="mini-btn" data-issue-order="${o.id}">📄 1007 PDF</button>
+          <button class="mini-btn wa" data-send-order="${o.id}">📤 שליחה</button>
+          <button class="mini-btn" data-edit-order="${o.id}">✏️ עריכה</button>
+          <button class="mini-btn danger" data-del-order="${o.id}" aria-label="מחיקת ה-1007">🗑️</button>
+        </div>
+      </div>` : ""}
+    </div>`;
+}
 function renderOrders(){
-  const all = [...state.orders].sort((a, b) =>
-    String(b.date || "").localeCompare(String(a.date || "")) || (parseInt(b.number) || 0) - (parseInt(a.number) || 0));
-  const bar = yearBar("ordersYear", all.map(o => yearOf(o.date)));
-  const list = all.filter(o => filt.ordersYear === "all" || yearOf(o.date) === filt.ordersYear);
+  const all = [...state.orders];
+  const isOpen = o => orderState(o) !== "done";
+  const tab = filt.ordersTab === "done" ? "done" : "open";
+  const nOpen = all.filter(isOpen).length, nDone = all.length - nOpen;
+  const list = all.filter(o => tab === "open" ? isOpen(o) : !isOpen(o));
   const shown = list.filter(o => {
     if (!search) return true;
     const c = companyById(o.companyId);
-    const hay = [o.number, o.serial, o.tzadi, o.vehicle, o.unit, o.repairs, c?.name].join(" ").toLowerCase();
-    return hay.includes(search.toLowerCase());
+    return [o.number, o.serial, o.tzadi, o.vehicle, o.unit, o.repairs, o.invNumber, c?.name].join(" ").toLowerCase().includes(search.toLowerCase());
   });
-  let html = bar + `<div class="section-title" style="margin-top:${bar ? 12 : 6}px;"><span>הזמנות עבודה${filt.ordersYear !== "all" ? ` · ${escapeHtml(yearLabel(filt.ordersYear))}` : ""}</span><span>${list.length}</span></div>`;
+  let html = `
+    <div class="seg" role="tablist" style="margin-top:6px;">
+      <button class="${tab === "open" ? "active" : ""}" data-filter="ordersTab" data-val="open">פתוחות<span class="n">${nOpen}</span></button>
+      <button class="${tab === "done" ? "active" : ""}" data-filter="ordersTab" data-val="done">טופלו<span class="n">${nDone}</span></button>
+    </div>`;
   if (!all.length){
     return html + `<div class="empty"><div class="big">📄</div><p><b>עוד אין הזמנות עבודה</b></p>
-      <p>לוחצים על + כדי למלא הזמנה ולהפיק טופס 1007</p>
-      ${state.companies.length ? "" : `<p style="font-size:13.5px;">טיפ: כדאי קודם להוסיף את החברה בלשונית "חברות"</p>`}</div>`;
+      <p>לוחצים על + כדי למלא הזמנה ולהפיק טופס 1007</p></div>`;
   }
+  if (!list.length) return html + `<div class="empty"><p>${tab === "open" ? "אין הזמנות פתוחות 👍" : "עוד אין הזמנות שטופלו"}</p></div>`;
   if (!shown.length) return html + `<div class="empty"><p>לא נמצאו הזמנות שמתאימות לחיפוש</p></div>`;
-  const orderSum = o => orderPrices(o)?.total || orderReserved(o);
-  return html + monthGroups(shown, o => o.date, orderSum, o => {
-    const c = companyById(o.companyId), b = budgetById(o.budgetLineId);
-    const kv = [
-      o.tzadi && ["צ'", `<span dir="ltr">${escapeHtml(o.tzadi)}</span>`],
-      (o.vehicle || o.hours) && ["כלי", escapeHtml([o.vehicle, o.hours ? `${fmtInt(o.hours)} ש"מ` : ""].filter(Boolean).join(" · "))],
-      o.unit && ["יחידה", escapeHtml(o.unit)],
-      o.repairs && ["תיקונים", escapeHtml(o.repairs).replace(/\n/g, "<br>")],
-      invoiceForOrder(o.id) && ["חשבונית", `🧾 ${escapeHtml(invoiceForOrder(o.id).number || "")} · ${fmtMoney(invoiceForOrder(o.id).total)}`],
-      deliveryForOrder(o.id) && ["תעודת משלוח", `📦 ${escapeHtml(deliveryForOrder(o.id).number || "")} · ${fmtMoney(deliveryForOrder(o.id).total)}`],
-      ["סעיף", b ? escapeHtml(budgetLabel(b)) : `<span style="color:var(--ink-soft)">${o.budgetLineId ? "סעיף שנמחק" : "לא שויך"}</span>`],
-    ].filter(Boolean);
-    return `
-    <div class="item-card">
-      <div class="item-top">
-        <div style="min-width:0;">
-          ${o.flag ? `<span class="flag-ic" title="${escapeHtml(o.flag)}">!</span> ` : ""}${orderState(o) !== "done" ? openIcon(1) : ""}<span class="order-no">הזמנה ${escapeHtml(o.number || "—")}${o.serial ? ` · סודר ${escapeHtml(o.serial)}` : ""}</span>${o.endDate ? ` <span class="pill-open" style="background:var(--pri-tint);color:var(--pri-dark);">הסתיים ${escapeHtml(fmtDateIL(o.endDate))}</span>` : ""}
-          <div class="item-title" style="margin-top:6px;">${escapeHtml(c?.name || "חברה לא נבחרה")}</div>
-          <div class="item-sub">${escapeHtml(fmtDateIL(o.date))}</div>
-        </div>
-        <div class="item-amt">${orderPrices(o) ? `<div class="big">${fmtMoney(orderPrices(o).total)}</div><div class="small">${statePill(o)} לפני מע"מ ${fmtMoney(orderPrices(o).before)}</div>` : orderReserved(o) ? `<div class="big">${fmtMoney(orderReserved(o))}</div><div class="small">${statePill(o)}</div>` : `<div class="big">—</div><div class="small">${statePill(o)}</div>`}</div>
-      </div>
-      <div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
-      <div class="item-actions">
-        <button class="mini-btn pri" data-issue-order="${o.id}">📄 הפקת 1007 (PDF)</button>
-        <button class="mini-btn wa" data-send-order="${o.id}">📤 שליחה</button>
-        ${invoiceForOrder(o.id) ? `<button class="mini-btn" data-edit-invoice="${invoiceForOrder(o.id).id}">🧾 החשבונית</button>` : `<button class="mini-btn" data-inv-for-order="${o.id}">🧾 העלאת חשבונית</button>`}
-        <button class="mini-btn" data-edit-order="${o.id}">✏️ עריכה</button>
-        <button class="mini-btn danger" data-del-order="${o.id}" aria-label="מחיקת ה-1007">🗑️ מחיקה</button>
-      </div>
-    </div>`;
-  }, filt.ordersYear === "all");
+  // קיבוץ לפי חברה; בתוך חברה — לפי תאריך (פתוחות: הישנה קודם, טופלו: החדשה קודם)
+  const groups = new Map();
+  for (const o of shown){ const k = companyById(o.companyId)?.name || "ללא חברה"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(o); }
+  const dir = tab === "open" ? 1 : -1;
+  return html + [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, "he")).map(([name, os]) => {
+    os.sort((a, b) => dir * String(a.date || "").localeCompare(String(b.date || "")));
+    const sum = os.reduce((t, o) => t + (orderPrices(o)?.total || orderReserved(o) || 0), 0);
+    return `<div class="r-grp"><div class="r-grp-head"><span>${escapeHtml(name)}</span><span class="tnum">${os.length}${sum ? ` · ${fmtMoney(sum)}` : ""}</span></div>
+      <div class="r-list">${os.map(orderRowHtml).join("")}</div></div>`;
+  }).join("");
 }
 
 let editingOrderId = null;
@@ -3189,6 +3223,7 @@ $("view").addEventListener("click", e => {
   if (f){ filt[f.dataset.filter] = f.dataset.val; saveFilters(); render(); return; }
   const rp = e.target.closest("#btnReportPdf"); if (rp) return budgetReportPdf(rp);
   if (e.target.closest("#btnReportXlsx")) return budgetReportXlsx();
+  const tor = e.target.closest("[data-toggle-orow]"); if (tor){ const k = tor.dataset.toggleOrow; openOrderRows.has(k) ? openOrderRows.delete(k) : openOrderRows.add(k); render(); return; }
   const tc = e.target.closest("[data-toggle-co]"); if (tc){ const k = tc.dataset.toggleCo; openCos.has(k) ? openCos.delete(k) : openCos.add(k); saveOpenCos(); render(); return; }
   const ca = e.target.closest("[data-co-all]"); if (ca){ openCos.clear(); if (ca.dataset.coAll === "open") filteredLines().forEach(l => openCos.add(l.companyId && companyById(l.companyId) ? l.companyId : "_none")); saveOpenCos(); render(); return; }
   const b = e.target.closest("[data-edit-budget]"); if (b) return openBudgetForm(b.dataset.editBudget);
