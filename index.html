@@ -1034,7 +1034,8 @@ function matches(obj, fields){
 
 /* ---------- render ---------- */
 function renderTabs(){
-  const counts = { budget: state.budgetLines.length, orders: state.orders.length, companies: state.companies.length, invoices: state.invoices.length };
+  // תקציב: רק סעיפים פעילים · 1007: רק הזמנות פתוחות (בלי חשבונית סגורה)
+  const counts = { budget: state.budgetLines.filter(l => !lineClosed(l)).length, orders: state.orders.filter(o => orderState(o) !== "done").length, companies: state.companies.length };
   $("tabs").innerHTML = TABS.map(t => `
     <button class="tab-chip ${t.id === activeTab ? "active" : ""} ${t.soon ? "soon" : ""}" data-tab="${t.id}">
       <span class="t-ic">${t.icon}</span><span>${t.label}</span>${t.soon ? "" : `<span class="count tnum">${counts[t.id]}</span>`}
