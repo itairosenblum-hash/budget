@@ -497,7 +497,7 @@
     </div>
   </div>
 </div>
-<datalist id="dlDocType"><option value="חשבונית מס"><option value="חשבונית מס קבלה"><option value="חשבון עסקה"><option value="קבלה"></datalist>
+<datalist id="dlDocType"><option value="חשבונית מס"><option value="חשבונית מס קבלה"><option value="חשבון עסקה"><option value="קבלה"><option value="תעודת משלוח"></datalist>
 <input type="file" id="scanInput" accept="image/*,application/pdf" hidden>
 
 <!-- Stamp sheet -->
@@ -726,6 +726,17 @@ function ilToISO(str){
   const t = new Date(iso + "T00:00:00");
   return !isNaN(t) && t.getDate() === +d && t.getMonth() + 1 === +mo ? iso : "";
 }
+function maskDateIL(v){
+  if (/[^\d\/.\-]/.test(v)) return v;
+  const f = ["", "", ""]; let k = 0;
+  for (const ch of v){
+    if (/[\/.\-]/.test(ch)){ if (k < 2 && f[k]) k++; continue; }
+    if (k < 2 && f[k].length === 2) k++;
+    if (k === 2 && f[2].length === 4) break;
+    f[k] += ch;
+  }
+  return f[0] + (k >= 1 ? "/" + f[1] : "") + (k >= 2 ? "/" + f[2] : "");
+}
 function getDate(id){ return ilToISO($(id).value); }
 function setDate(id, iso){ $(id).value = iso ? fmtDateIL(iso) : ""; $(id).closest(".field")?.classList.remove("invalid"); }
 function setupDateInputs(){
@@ -741,13 +752,11 @@ function setupDateInputs(){
       try{ native.showPicker(); }catch(e){ native.focus(); native.click(); }
     };
     native.onchange = () => { if (native.value){ setDate(el.id, native.value); el.dispatchEvent(new Event("change")); } };
-    // הקלדה: לוכסנים נוספים לבד (22102026 → 22/10/2026)
+    // הקלדה: לוכסנים נוספים לבד (22102026 → 22/10/2026), גם אחרי שכבר נוסף לוכסן
     el.addEventListener("input", e => {
       if (e.inputType && e.inputType.startsWith("delete")) return;
-      const v = el.value;
-      if (/[^\d\/]/.test(v) || v.includes("/")) return;
-      const d = v.replace(/\D/g, "").slice(0, 8);
-      el.value = d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+      const v = el.value, m = maskDateIL(v);
+      if (m !== v) el.value = m;
     });
     el.addEventListener("blur", () => {
       const raw = el.value.trim();
@@ -1158,7 +1167,7 @@ function usageRows(l){
       state: USAGE_STATE[orderState(r.o)], reserved: r.reserved || 0, before: r.prices ? r.prices.before : null, total: r.prices ? r.prices.total : null,
       balance: round2(bal), invoice: r.inv ? String(r.inv.number || "") : "", desc: String(r.o.repairs || "").split("\n")[0] });
   }
-  const direct = state.invoices.filter(i => !orderById(i.orderId) && i.budgetLineId === l.id)
+  const direct = state.invoices.filter(i => !isDeliveryNote(i) && !orderById(i.orderId) && i.budgetLineId === l.id)
     .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
   for (const i of direct){
     const p = invoicePrices(i), amt = invoiceAmount(i, line);
@@ -1619,6 +1628,7 @@ function renderOrders(){
       o.unit && ["יחידה", escapeHtml(o.unit)],
       o.repairs && ["תיקונים", escapeHtml(o.repairs).replace(/\n/g, "<br>")],
       invoiceForOrder(o.id) && ["חשבונית", `🧾 ${escapeHtml(invoiceForOrder(o.id).number || "")} · ${fmtMoney(invoiceForOrder(o.id).total)}`],
+      deliveryForOrder(o.id) && ["תעודת משלוח", `📦 ${escapeHtml(deliveryForOrder(o.id).number || "")} · ${fmtMoney(deliveryForOrder(o.id).total)}`],
       ["סעיף", b ? escapeHtml(budgetLabel(b)) : `<span style="color:var(--ink-soft)">${o.budgetLineId ? "סעיף שנמחק" : "לא שויך"}</span>`],
     ].filter(Boolean);
     return `
@@ -2075,7 +2085,10 @@ const fileDel = id => fileOp("readwrite", s => s.delete(id));
 
 function orderById(id){ return state.orders.find(o => o.id === id); }
 function invoiceLineId(inv){ return inv.budgetLineId || orderById(inv.orderId)?.budgetLineId || ""; }
-function invoiceForOrder(orderId){ return state.invoices.find(i => i.orderId === orderId); }
+// תעודת משלוח: נשמרת ומוצגת, אבל לא יורדת מהתקציב ולא תופסת את ההזמנה — רק חשבונית נספרת.
+function isDeliveryNote(inv){ return /משלוח/.test(String(inv?.docType || "")); }
+function invoiceForOrder(orderId){ return state.invoices.find(i => i.orderId === orderId && !isDeliveryNote(i)); }
+function deliveryForOrder(orderId){ return state.invoices.find(i => i.orderId === orderId && isDeliveryNote(i)); }
 const VAT_RATE = 0.18;
 function round2(x){ return Math.round(x * 100) / 100; }
 function invoicePrices(inv){
@@ -2126,7 +2139,7 @@ function lineUsage(lineId){
   let actual = rows.reduce((s, o) => s + orderPrice(o), 0);
   let reserved = rows.reduce((s, o) => s + orderReserved(o), 0);
   // חשבונית ששויכה ישירות לסעיף בלי 1007
-  for (const i of state.invoices.filter(i => !orderById(i.orderId) && i.budgetLineId === lineId)){
+  for (const i of state.invoices.filter(i => !isDeliveryNote(i) && !orderById(i.orderId) && i.budgetLineId === lineId)){
     if (i.stamped) actual += invoiceAmount(i, line); else reserved += invoiceAmount(i, line);
   }
   const open = rows.filter(o => orderState(o) === "open").length;
@@ -2150,7 +2163,7 @@ function renderInvoices(){
     const c = companyById(i.companyId), o = orderById(i.orderId);
     return [i.number, i.description, c?.name, o?.number, o?.tzadi].join(" ").toLowerCase().includes(search.toLowerCase());
   });
-  const sum = list.reduce((s, i) => s + (Number(i.total) || 0), 0);
+  const sum = list.reduce((s, i) => s + (isDeliveryNote(i) ? 0 : Number(i.total) || 0), 0);
   let html = `
     <button class="send-btn" id="btnScanInvoice" style="margin-top:6px;">
       <span class="ic" style="background:var(--amber-tint);">📷</span>
@@ -2176,7 +2189,7 @@ function renderInvoices(){
           <div class="item-title" style="margin-top:6px;">${escapeHtml(c?.name || "חברה לא נבחרה")}</div>
           <div class="item-sub">${escapeHtml(fmtDateIL(i.date))}${i.stamped ? ` · <span style="color:var(--good);font-weight:800;">✅ נבדקה והוזרמה ${escapeHtml(fmtDateIL(i.stamped.date))}</span>` : ""}</div>
         </div>
-        <div class="item-amt"><div class="big">${fmtMoney(i.total)}</div><div class="small">כולל מע"מ</div></div>
+        <div class="item-amt"><div class="big">${fmtMoney(i.total)}</div><div class="small">${isDeliveryNote(i) ? "לא יורד מהתקציב" : 'כולל מע"מ'}</div></div>
       </div>
       <div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
       <div class="item-actions">
