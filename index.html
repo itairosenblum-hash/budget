@@ -1557,7 +1557,12 @@ function render(){
 }
 
 /* ---------- sheets ---------- */
-function openSheet(id){ $(id).classList.add("show"); }
+// כל טופס נפתח מהחלק העליון (ולא מהמקום שבו נסגר בפעם הקודמת)
+function openSheet(id){
+  const ov = $(id), top = () => { ov.scrollTop = 0; ov.querySelectorAll(".sheet").forEach(sh => sh.scrollTop = 0); };
+  if (document.activeElement && ov.contains(document.activeElement)) document.activeElement.blur();
+  top(); ov.classList.add("show"); requestAnimationFrame(top);
+}
 function closeSheet(id){ $(id).classList.remove("show"); }
 document.querySelectorAll(".overlay").forEach(ov => {
   ov.addEventListener("click", e => { if (e.target === ov || e.target.closest("[data-close]")) ov.classList.remove("show"); });
