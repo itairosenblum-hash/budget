@@ -76,7 +76,7 @@
   #app{max-width:760px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;}
 
   /* ---- Top bar ---- */
-  header.topbar{position:sticky;top:var(--safe-t);z-index:20;background:var(--bg);padding:16px 18px 10px;border-bottom:1px solid transparent;}
+  header.topbar{position:sticky;top:var(--safe-t);z-index:20;background:var(--bg);padding:16px 18px 12px;border-bottom:1px solid var(--border);box-shadow:0 6px 12px -10px rgba(0,0,0,.25);}
   header.topbar.scrolled{border-bottom-color:var(--border);}
   .brand-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .brand{display:flex;align-items:center;gap:10px;min-width:0;}
@@ -96,7 +96,7 @@
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
 
   /* ארבעה כפתורים בשתי שורות: חברות | תקציב / הזמנות 1007 | חשבוניות (מימין לשמאל) */
-  .tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 0 4px;}
+  .tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 0 12px;border-bottom:1px dashed var(--border);}
   .tab-chip{border:1px solid var(--border);background:var(--card);color:var(--ink-soft);border-radius:14px;padding:11px 12px;font-size:15.5px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;box-shadow:var(--shadow);}
   .tab-chip > span:nth-child(2){white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   @media (min-width: 900px){ .tabs{grid-template-columns:repeat(4, 1fr);} }
@@ -297,7 +297,7 @@
   .ic-btn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:10px;background:var(--card);font-size:16px;text-decoration:none;cursor:pointer;}
   .ic-btn[aria-disabled="true"]{opacity:.3;pointer-events:none;}
   .menu-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-  .menu-stats div{background:var(--card-2);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;}
+  .menu-stats div{border-top:1px solid var(--border);padding:8px 2px;display:flex;flex-direction:column;gap:2px;}
   .menu-stats span{font-size:12.5px;color:var(--ink-soft);}
   .menu-stats b{font-size:16px;}
   .settings-fold{border:1px solid var(--border);border-radius:12px;background:var(--card);}
@@ -317,7 +317,19 @@
   .ln-wrap{border-bottom:1px solid var(--border);}
   .ln-wrap .ln-row{border-bottom:0;}
   .ln-wrap.open{background:var(--card);}
-  .ln-more{padding:0 12px 12px;}
+  .ln-more{padding:2px 12px 12px;}
+  .ln-kv{margin:0 0 6px;}
+  .stat-line{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:8px 0 2px;}
+  .stat-line div{display:flex;flex-direction:column;gap:2px;padding:8px 8px;}
+  .stat-line div + div{border-inline-start:1px solid var(--border);}
+  .stat-line span{font-size:12px;color:var(--ink-soft);}
+  .stat-line b{font-size:15.5px;}
+  .filter-panel{background:var(--card-2);border:1px solid var(--border);border-radius:16px;padding:10px 12px 12px;margin-top:12px;}
+  .filter-panel .care-btn{margin:8px 0 0;}
+  .filter-panel .co-tools{margin:10px 0 0;}
+  .fp-label{font-size:12.5px;font-weight:800;color:var(--ink-soft);margin:0 2px 8px;}
+  .list-title small{font-weight:600;font-size:12.5px;margin-inline-start:6px;}
+  .link-btn{border:0;background:none;color:var(--pri-dark);font:inherit;font-size:13.5px;font-weight:800;cursor:pointer;padding:4px 0;}
   .ln-btns{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:6px;margin-top:10px;}
   .ln-btns .mini-btn{justify-content:center;padding:8px 4px;font-size:13.5px;white-space:nowrap;min-width:0;}
   .ln-row:hover{background:var(--card);}
@@ -1047,7 +1059,7 @@ function renderBudget(){
   if (openLineId && budgetById(openLineId)) return renderLineDetail(budgetById(openLineId));
   openLineId = null;
   const all = sortedLines();
-  const yearBarHtml = yearBar("budgetYear", all.map(lineYear));
+  filt.budgetYear = "all"; // אין סינון לפי שנה במסך התקציב
   const inYear = all.filter(l => filt.budgetYear === "all" || lineYear(l) === filt.budgetYear);
   const nActive = inYear.filter(l => !lineClosed(l)).length, nClosed = inYear.length - nActive;
   const lines = filteredLines();
@@ -1067,8 +1079,11 @@ function renderBudget(){
     .filter(l => !care || state.orders.some(o => o.budgetLineId === l.id && needsCare(o)))
     .filter(l => !expOnly || lineExpiring(l));
   if (all.length){
-    html += yearBarHtml + `
-      <div class="seg" role="tablist">
+    const sk = filt.budgetSort || "name";
+    html += `
+      <div class="filter-panel">
+      <div class="fp-label">סינון ותצוגה</div>
+      <div class="seg" role="tablist" style="margin-top:0;">
         ${[["active", "פעילים", nActive], ["closed", "סגורים", nClosed], ["all", "הכל", inYear.length]].map(([k, t, n]) =>
           `<button class="${filt.budgetStatus === k ? "active" : ""}" data-filter="budgetStatus" data-val="${k}">${t}<span class="n">${n}</span></button>`).join("")}
       </div>
@@ -1078,13 +1093,18 @@ function renderBudget(){
       <button class="care-btn exp ${expOnly ? "on" : ""}" data-filter="expiring" data-val="${expOnly ? "0" : "1"}">
         <span class="exp-ic">⏰</span><span>${expOnly ? "מוצגות רק הזמנות שתוקפן קרוב לפוג — הקש להצגת הכל" : "הצג רק הזמנות שתוקפן יפוג ב־3 החודשים הקרובים"}</span><span class="n tnum">${nExp}</span>
       </button>
-`;
+      <div class="co-tools">
+        <span class="co-tools-lbl">מיון:</span>
+        ${[["name", "א-ב"], ["free", "פנוי הכי מעט"], ["amount", "תקציב הכי גדול"]].map(([k, t]) =>
+          `<button class="chip-btn ${sk === k ? "on" : ""}" data-filter="budgetSort" data-val="${k}">${t}</button>`).join("")}
+      </div>
+      </div>`;
   }
-  html += `<div class="section-title"><span>תקציבים לפי חברה</span><span>${new Set(lines.map(l => l.companyId || "")).size} חברות · ${lines.length} סעיפים</span></div>`;
+  html += `<div class="section-title list-title"><span>תקציבים לפי חברה <small>${new Set(lines.map(l => l.companyId || "")).size} חברות · ${lines.length} סעיפים</small></span><!--coAll--></div>`;
   if (!all.length){
     return html + `<div class="empty"><div class="big">📊</div><p><b>עוד אין סעיפי תקציב</b></p><p>לוחצים על + כדי להוסיף הזמנת מסגרת (חברה, מספר הזמנה, סכום)</p></div>`;
   }
-  if (!lines.length) return html + `<div class="empty"><p>אין סעיפים ${filt.budgetStatus === "closed" ? "סגורים" : filt.budgetStatus === "active" ? "פעילים" : ""} ב${escapeHtml(yearLabel(filt.budgetYear))}</p></div>`;
+  if (!lines.length) return html + `<div class="empty"><p>אין סעיפים ${filt.budgetStatus === "closed" ? "סגורים" : filt.budgetStatus === "active" ? "פעילים" : ""} </p></div>`;
   if (!shown.length) return html + `<div class="empty"><p>${care ? "אין שורות פתוחות שדורשות טיפול 👍" : expOnly ? "אין הזמנות שתוקפן יפוג ב־3 החודשים הקרובים 👍" : "לא נמצאו סעיפים שמתאימים לחיפוש"}</p></div>`;
   // תצוגה לפי חברות: שורה קומפקטית לכל חברה, הקשה פותחת את הסעיפים שלה
   const groups = new Map();
@@ -1105,13 +1125,8 @@ function renderBudget(){
     (sortKey === "free" ? a.free - b.free : sortKey === "amount" ? b.amt - a.amt : 0) ||
     a.name.localeCompare(b.name, "he"));
   const allOpen = !!search || care || expOnly;
-  html += `<div class="co-tools">
-      <span class="co-tools-lbl">מיון:</span>
-      ${[["name", "א-ב"], ["free", "פנוי הכי מעט"], ["amount", "תקציב הכי גדול"]].map(([k, t]) =>
-        `<button class="chip-btn ${sortKey === k ? "on" : ""}" data-filter="budgetSort" data-val="${k}">${t}</button>`).join("")}
-      <button class="chip-btn" data-co-all="${openCos.size ? "close" : "open"}" style="margin-inline-start:auto;">${openCos.size ? "סגירת הכל" : "פתיחת הכל"}</button>
-    </div>
-    <div class="co-list">`;
+  html = html.replace("<!--coAll-->", `<button class="link-btn" data-co-all="${openCos.size ? "close" : "open"}">${openCos.size ? "סגירת הכל" : "פתיחת הכל"}</button>`);
+  html += `<div class="co-list">`;
   html += gs.map(g => {
     const isOpen = allOpen || openCos.has(g.cid || "_none");
     const nf = flagCount(g.ls);
@@ -1148,8 +1163,13 @@ function renderBudget(){
           </span>
         </button>
         ${openLns.has(l.id) ? `<div class="ln-more">
-          <div class="meta-chips">${lineChips(l)}</div>
-          <div class="menu-stats" style="grid-template-columns:repeat(3,1fr);margin-top:8px;">
+          <div class="kv ln-kv">${[
+            l.orderNumber && ["הזמנה", `<span dir="ltr">${escapeHtml(l.orderNumber)}</span>`],
+            l.requisition && ["דרישה", `<span dir="ltr">${escapeHtml(l.requisition)}</span>`],
+            l.openDate && ["ת.פ", escapeHtml(fmtDateIL(l.openDate))],
+            l.validUntil && ["תוקף", `${escapeHtml(fmtDateIL(l.validUntil))}${lineExpiring(l) ? ` <span style="color:${l.validUntil < todayISO() ? "var(--danger)" : "var(--amber-ink)"};font-weight:700;">⏰ ${l.validUntil < todayISO() ? "פג תוקף" : "קרוב לפוג"}</span>` : ""}`],
+          ].filter(Boolean).map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
+          <div class="stat-line">
             <div><span>נוצל בפועל</span><b class="tnum">${fmtMoney(u.actual)}</b></div>
             <div><span>משוריין</span><b class="tnum" style="color:var(--amber-ink)">${fmtMoney(u.reserved)}</b></div>
             <div><span>פנוי</span><b class="tnum" style="color:${u.free < 0 ? "var(--danger)" : "var(--good)"}">${fmtMoney(u.free)}</b></div>
@@ -3297,7 +3317,7 @@ function renderMenuSummary(){
       <button class="mini-btn pri" id="btnReportPdf">📄 דוח תקציבים PDF</button>
       <button class="mini-btn" id="btnReportXlsx">📊 דוח תקציבים Excel</button>
     </div>
-    <div class="hint" style="margin-top:6px;">הסיכום והדוחות לפי הסינון שבמסך התקציב (שנה / פעילים).</div>`;
+    <div class="hint" style="margin-top:6px;">הסיכום והדוחות לפי הסינון שבמסך התקציב (פעילים / סגורים / הכל).</div>`;
 }
 $("menuSummary").addEventListener("click", e => {
   const rp = e.target.closest("#btnReportPdf"); if (rp) return budgetReportPdf(rp);
