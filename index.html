@@ -251,13 +251,33 @@
   .sec-idx{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;flex:none;}
   .sec-title{font-weight:800;font-size:16.5px;min-width:0;overflow-wrap:anywhere;}
   .sec-sub{font-size:12.5px;opacity:.85;}
-  .co-group{background:var(--card-2);border:1px solid var(--border);border-radius:18px;padding:12px;margin-bottom:12px;min-width:0;}
-  .co-group.closed{opacity:.75;}
-  .co-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;}
-  .co-name{font-weight:900;font-size:18px;overflow-wrap:anywhere;}
-  .co-sub{font-size:12.5px;color:var(--ink-soft);}
-  .co-free{font-weight:900;font-size:19px;color:var(--good);}
-  .co-free.bad{color:var(--danger);}
+  .co-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0 10px;}
+  .co-tools-lbl{font-size:13px;color:var(--ink-soft);font-weight:700;}
+  .chip-btn{border:1px solid var(--border);background:var(--card);color:var(--ink-soft);border-radius:999px;padding:5px 11px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;}
+  .chip-btn.on{background:var(--pri);border-color:var(--pri);color:#fff;}
+  .co-list{display:flex;flex-direction:column;gap:8px;}
+  .co-row{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;min-width:0;}
+  .co-row.closed{opacity:.7;}
+  .co-btn{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:12px 12px 8px;font:inherit;color:inherit;text-align:right;cursor:pointer;}
+  .co-chev{flex:none;width:18px;font-size:20px;color:var(--ink-soft);transition:transform .2s;line-height:1;}
+  .co-row.open .co-chev{transform:rotate(90deg);}
+  .co-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .co-name{font-weight:800;font-size:16px;overflow-wrap:anywhere;}
+  .co-sub{font-size:12px;color:var(--ink-soft);}
+  .co-nums{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:left;}
+  .co-free{font-weight:900;font-size:17px;color:var(--good);}
+  .co-free.bad,.ln-free.bad{color:var(--danger);}
+  .co-flag{display:inline-block;font-size:11px;font-weight:800;padding:1px 7px;border-radius:999px;background:var(--amber-tint);color:var(--amber-ink);vertical-align:2px;}
+  .co-flag.bad{background:var(--danger-tint);color:var(--danger);}
+  .co-lines{border-top:1px solid var(--border);background:var(--card-2);}
+  .ln-row{display:flex;align-items:center;gap:10px;width:100%;border:0;border-bottom:1px solid var(--border);background:none;padding:10px 12px;font:inherit;color:inherit;text-align:right;cursor:pointer;}
+  .ln-row:hover{background:var(--card);}
+  .ln-row.closed{opacity:.65;}
+  .ln-idx{flex:none;min-width:30px;height:30px;padding:0 4px;border-radius:8px;background:var(--pri-tint);color:var(--pri-dark);font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;}
+  .ln-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+  .ln-title{font-weight:700;font-size:14.5px;overflow-wrap:anywhere;}
+  .ln-free{font-weight:800;font-size:15px;}
+  .ln-actions{padding:8px 12px 10px;}
   .sec-card{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;min-width:0;}
   .sec-body{padding:12px 14px;display:flex;flex-direction:column;gap:10px;}
   .meta-chips{display:flex;gap:6px;flex-wrap:wrap;}
@@ -653,6 +673,9 @@ let openLineId = null;   // סעיף שפתוח בתצוגת הטבלה
 const FILTERS_KEY = "tzahram_filters";
 const filt = Object.assign({ budgetYear: "all", budgetStatus: "active", ordersYear: "all", invoicesYear: "all" },
   (() => { try{ return JSON.parse(localStorage.getItem(FILTERS_KEY)) || {}; }catch(e){ return {}; } })());
+const OPEN_COS_KEY = "tzahram_open_cos";
+const openCos = new Set((() => { try{ return JSON.parse(localStorage.getItem(OPEN_COS_KEY)) || []; }catch(e){ return []; } })());
+function saveOpenCos(){ try{ localStorage.setItem(OPEN_COS_KEY, JSON.stringify([...openCos])); }catch(e){} }
 function saveFilters(){ try{ localStorage.setItem(FILTERS_KEY, JSON.stringify(filt)); }catch(e){} }
 const HE_MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"];
 function yearOf(iso){ return /^\d{4}-/.test(String(iso || "")) ? String(iso).slice(0, 4) : "none"; }
@@ -1001,59 +1024,71 @@ function renderBudget(){
   }
   if (!lines.length) return html + `<div class="empty"><p>אין סעיפים ${filt.budgetStatus === "closed" ? "סגורים" : filt.budgetStatus === "active" ? "פעילים" : ""} ב${escapeHtml(yearLabel(filt.budgetYear))}</p></div>`;
   if (!shown.length) return html + `<div class="empty"><p>לא נמצאו סעיפים שמתאימים לחיפוש</p></div>`;
-  // איחוד לפי חברות: כרטיס מסכם לכל חברה, ומתחתיו הסעיפים שלה
+  // תצוגה לפי חברות: שורה קומפקטית לכל חברה, הקשה פותחת את הסעיפים שלה
   const groups = new Map();
   for (const l of shown){
     const key = l.companyId && companyById(l.companyId) ? l.companyId : "";
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(l);
   }
-  const ordered = [...groups.entries()].sort(([a], [b]) => !a ? 1 : !b ? -1 : String(companyById(a).name || "").localeCompare(String(companyById(b).name || ""), "he"));
-  return html + ordered.map(([cid, ls]) => {
-    const c = companyById(cid);
+  const gs = [...groups.entries()].map(([cid, ls]) => {
     const us = ls.map(l => lineUsage(l.id));
-    const gAmt = ls.reduce((t, l) => t + (Number(l.amount) || 0), 0);
-    const gAct = round2(us.reduce((t, u) => t + u.actual, 0)), gRes = round2(us.reduce((t, u) => t + u.reserved, 0));
-    const gFree = round2(gAmt - gAct - gRes);
-    const gRows = us.reduce((t, u) => t + u.rows, 0), gOpen = us.reduce((t, u) => t + u.open, 0), gPend = us.reduce((t, u) => t + u.pending, 0);
-    const allClosed = ls.every(lineClosed);
+    const amt = ls.reduce((t, l) => t + (Number(l.amount) || 0), 0);
+    const act = round2(us.reduce((t, u) => t + u.actual, 0)), res = round2(us.reduce((t, u) => t + u.reserved, 0));
+    return { cid, ls, us, amt, act, res, free: round2(amt - act - res), name: companyById(cid)?.name || "ללא חברה",
+      pct: amt ? (act + res) / amt : 0, open: us.reduce((t, u) => t + u.open, 0), pend: us.reduce((t, u) => t + u.pending, 0) };
+  });
+  const sortKey = filt.budgetSort || "name";
+  gs.sort((a, b) => (!a.cid) - (!b.cid) ||
+    (sortKey === "free" ? a.free - b.free : sortKey === "amount" ? b.amt - a.amt : 0) ||
+    a.name.localeCompare(b.name, "he"));
+  const allOpen = !!search;
+  html += `<div class="co-tools">
+      <span class="co-tools-lbl">מיון:</span>
+      ${[["name", "א-ב"], ["free", "פנוי הכי מעט"], ["amount", "תקציב הכי גדול"]].map(([k, t]) =>
+        `<button class="chip-btn ${sortKey === k ? "on" : ""}" data-filter="budgetSort" data-val="${k}">${t}</button>`).join("")}
+      <button class="chip-btn" data-co-all="${openCos.size ? "close" : "open"}" style="margin-inline-start:auto;">${openCos.size ? "סגירת הכל" : "פתיחת הכל"}</button>
+    </div>
+    <div class="co-list">`;
+  html += gs.map(g => {
+    const isOpen = allOpen || openCos.has(g.cid || "_none");
+    const warn = g.free < 0 ? `<span class="co-flag bad">חריגה</span>` : g.pct >= .85 ? `<span class="co-flag">${Math.round(g.pct * 100)}%</span>` : "";
+    const info = [`${g.ls.length} ${g.ls.length === 1 ? "סעיף" : "סעיפים"}`, g.open && `${g.open} פתוחות`, g.pend && `${g.pend} לחתימה`].filter(Boolean).join(" · ");
     return `
-    <div class="co-group ${allClosed ? "closed" : ""}">
-      <div class="co-head">
-        <div style="min-width:0;flex:1;">
-          <div class="co-name">${escapeHtml(c?.name || "ללא חברה")}</div>
-          <div class="co-sub">${ls.length} ${ls.length === 1 ? "סעיף" : "סעיפים"} · ${gRows} שורות${gOpen ? ` · ${gOpen} פתוחות` : ""}${gPend ? ` · ${gPend} ממתינות לחתימה` : ""}</div>
-        </div>
-        <div style="text-align:left;flex:none;"><div class="co-free tnum ${gFree < 0 ? "bad" : ""}">${fmtMoney(gFree)}</div><div class="co-sub">פנוי מתוך ${fmtMoney(gAmt)}</div></div>
-      </div>
-      ${barHtml(gAct, gRes, gAmt, "margin:2px 0 4px;")}
-      <div class="item-meta" style="margin-bottom:10px;"><span>נוצל ${fmtMoney(gAct)} · משוריין ${fmtMoney(gRes)}</span>${cid ? `<button class="mini-btn" data-new-order-for="${cid}">📄 הזמנה</button>` : ""}</div>
-      <div class="cards">${ls.map(l => {
-    const amt = Number(l.amount) || 0, u = lineUsage(l.id);
-    return `
-    <div class="sec-card ${lineClosed(l) ? "closed" : ""}">
-      <div class="sec-head">
-        <div class="sec-idx">${escapeHtml(l.index || "—")}</div>
-        <div style="min-width:0;flex:1;">
-          <div class="sec-title">${escapeHtml(l.title || (l.orderNumber ? `הזמנה ${l.orderNumber}` : `סעיף ${l.index || ""}`))}</div>
-          <div class="sec-sub">${lineYear(l) !== "none" ? `שנת ${lineYear(l)}` : "ללא שנה"}${lineClosed(l) ? " · 🔒 סגור" : ""}</div>
-        </div>
-        <div style="text-align:left;flex:none;"><div style="font-weight:900;font-size:17px;" class="tnum">${fmtMoney(u.free)}</div><div class="sec-sub">פנוי מתוך ${fmtMoney(amt)}</div></div>
-      </div>
-      <div class="sec-body">
-        <div class="meta-chips">${lineChips(l)}</div>
-        ${barHtml(u.actual, u.reserved, amt)}
-        <div class="item-meta"><span>נוצל ${fmtMoney(u.actual)} · משוריין ${fmtMoney(u.reserved)}</span><span>${u.rows} שורות${u.open ? ` · ${u.open} פתוחות` : ""}${u.pending ? ` · ${u.pending} ממתינות לחתימה` : ""}</span></div>
-        <div class="item-actions">
-          <button class="mini-btn pri" data-open-line="${l.id}">📋 פתיחת הסעיף</button>
-          <button class="mini-btn" data-new-row="${l.id}">➕ שורה</button>
-          <button class="mini-btn" data-edit-budget="${l.id}">✏️ עריכה</button>
-        </div>
-      </div>
+    <div class="co-row ${isOpen ? "open" : ""} ${g.ls.every(lineClosed) ? "closed" : ""}">
+      <button class="co-btn" data-toggle-co="${g.cid || "_none"}" aria-expanded="${isOpen}">
+        <span class="co-chev">‹</span>
+        <span class="co-main">
+          <span class="co-name">${escapeHtml(g.name)} ${warn}</span>
+          <span class="co-sub">${info}</span>
+        </span>
+        <span class="co-nums">
+          <span class="co-free tnum ${g.free < 0 ? "bad" : ""}">${fmtMoney(g.free)}</span>
+          <span class="co-sub tnum">מתוך ${fmtMoney(g.amt)}</span>
+        </span>
+      </button>
+      ${barHtml(g.act, g.res, g.amt, "height:6px;margin:0 12px 10px;")}
+      ${isOpen ? `<div class="co-lines">${g.ls.map((l, k) => {
+        const u = g.us[k], amt = Number(l.amount) || 0;
+        return `
+        <button class="ln-row ${lineClosed(l) ? "closed" : ""}" data-open-line="${l.id}">
+          <span class="ln-idx">${escapeHtml(l.index || "—")}</span>
+          <span class="ln-main">
+            <span class="ln-title">${escapeHtml(l.title || (l.orderNumber ? `הזמנה ${l.orderNumber}` : "סעיף"))}</span>
+            <span class="co-sub">${[lineYear(l) !== "none" ? lineYear(l) : "", l.orderNumber && l.title ? `הזמנה ${escapeHtml(l.orderNumber)}` : "", lineClosed(l) ? "🔒 סגור" : "", u.open ? `${u.open} פתוחות` : "", u.pending ? `${u.pending} לחתימה` : ""].filter(Boolean).join(" · ")}</span>
+            ${barHtml(u.actual, u.reserved, amt, "height:4px;margin-top:6px;")}
+          </span>
+          <span class="co-nums">
+            <span class="ln-free tnum ${u.free < 0 ? "bad" : ""}">${fmtMoney(u.free)}</span>
+            <span class="co-sub tnum">מתוך ${fmtMoney(amt)}</span>
+          </span>
+        </button>`;
+      }).join("")}
+        ${g.cid ? `<div class="ln-actions"><button class="mini-btn" data-new-order-for="${g.cid}">📄 הזמנה חדשה ל${escapeHtml(g.name)}</button></div>` : ""}
+      </div>` : ""}
     </div>`;
-      }).join("")}</div>
-    </div>`;
-  }).join("");
+  }).join("") + `</div>`;
+  return html;
 }
 
 /* טבלת הסעיף — אותן עמודות כמו בגיליון: סודר, מספר צ', סוג הכלי, יחידה, תחילה, סיום, שע"מ, מחיר, יתרה, חשבונית, תאור התיקון */
@@ -3089,6 +3124,8 @@ $("view").addEventListener("click", e => {
   if (f){ filt[f.dataset.filter] = f.dataset.val; saveFilters(); render(); return; }
   const rp = e.target.closest("#btnReportPdf"); if (rp) return budgetReportPdf(rp);
   if (e.target.closest("#btnReportXlsx")) return budgetReportXlsx();
+  const tc = e.target.closest("[data-toggle-co]"); if (tc){ const k = tc.dataset.toggleCo; openCos.has(k) ? openCos.delete(k) : openCos.add(k); saveOpenCos(); render(); return; }
+  const ca = e.target.closest("[data-co-all]"); if (ca){ openCos.clear(); if (ca.dataset.coAll === "open") filteredLines().forEach(l => openCos.add(l.companyId && companyById(l.companyId) ? l.companyId : "_none")); saveOpenCos(); render(); return; }
   const b = e.target.closest("[data-edit-budget]"); if (b) return openBudgetForm(b.dataset.editBudget);
   const c = e.target.closest("[data-edit-company]"); if (c) return openCompanyForm(c.dataset.editCompany);
   const o = e.target.closest("[data-edit-order]"); if (o) return openOrderForm(o.dataset.editOrder);
