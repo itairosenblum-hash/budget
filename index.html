@@ -268,6 +268,7 @@
   .co-free{font-weight:900;font-size:17px;color:var(--good);}
   .co-free.bad,.ln-free.bad{color:var(--danger);}
   .flag-ic{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#D93025;color:#fff;font-weight:900;font-size:13px;line-height:1;vertical-align:-3px;flex:none;}
+  .flag-ic.open{background:#F08C00;}
   .flag-note{font-size:12px;color:#D93025;font-weight:700;margin-top:2px;white-space:normal;}
   .flag-field label{display:flex;align-items:center;gap:6px;}
   .co-flag{display:inline-block;font-size:11px;font-weight:800;padding:1px 7px;border-radius:999px;background:var(--amber-tint);color:var(--amber-ink);vertical-align:2px;}
@@ -1057,7 +1058,7 @@ function renderBudget(){
   html += gs.map(g => {
     const isOpen = allOpen || openCos.has(g.cid || "_none");
     const nf = flagCount(g.ls);
-    const warn = (nf ? `<span class="flag-ic" title="${nf} שורות לטיפול">!</span> ` : "") + (g.free < 0 ? `<span class="co-flag bad">חריגה</span>` : g.pct >= .85 ? `<span class="co-flag">${Math.round(g.pct * 100)}%</span>` : "");
+    const warn = (nf ? `<span class="flag-ic" title="${nf} שורות לטיפול">!</span> ` : "") + openIcon(openCount(g.ls)) + (g.free < 0 ? `<span class="co-flag bad">חריגה</span>` : g.pct >= .85 ? `<span class="co-flag">${Math.round(g.pct * 100)}%</span>` : "");
     const info = [`${g.ls.length} ${g.ls.length === 1 ? "סעיף" : "סעיפים"}`, g.open && `${g.open} פתוחות`, g.pend && `${g.pend} לחתימה`].filter(Boolean).join(" · ");
     return `
     <div class="co-row ${isOpen ? "open" : ""} ${g.ls.every(lineClosed) ? "closed" : ""}">
@@ -1079,7 +1080,7 @@ function renderBudget(){
         <button class="ln-row ${lineClosed(l) ? "closed" : ""}" data-open-line="${l.id}">
           <span class="ln-idx">${escapeHtml(l.index || "—")}</span>
           <span class="ln-main">
-            <span class="ln-title">${flagCount([l]) ? `<span class="flag-ic" title="${flagCount([l])} שורות לטיפול">!</span> ` : ""}${escapeHtml(l.title || (l.orderNumber ? `הזמנה ${l.orderNumber}` : "סעיף"))}</span>
+            <span class="ln-title">${flagCount([l]) ? `<span class="flag-ic" title="${flagCount([l])} שורות לטיפול">!</span> ` : ""}${openIcon(openCount([l]))}${escapeHtml(l.title || (l.orderNumber ? `הזמנה ${l.orderNumber}` : "סעיף"))}</span>
             <span class="co-sub">${[lineYear(l) !== "none" ? lineYear(l) : "", l.orderNumber && l.title ? `הזמנה ${escapeHtml(l.orderNumber)}` : "", lineClosed(l) ? "🔒 סגור" : "", u.open ? `${u.open} פתוחות` : "", u.pending ? `${u.pending} לחתימה` : ""].filter(Boolean).join(" · ")}</span>
             ${barHtml(u.actual, u.reserved, amt, "height:4px;margin-top:6px;")}
           </span>
@@ -1143,7 +1144,7 @@ function renderLineDetail(l){
       <tbody>
         <tr class="start"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>${fmtMoney(amt)}</td><td></td><td></td></tr>
         ${rows.map(r => `<tr class="row" data-row-order="${r.o.id}">
-          <td>${r.o.flag ? `<span class="flag-ic" title="${escapeHtml(r.o.flag)}">!</span> ` : ""}${escapeHtml(r.o.serial || "")}</td>
+          <td>${r.o.flag ? `<span class="flag-ic" title="${escapeHtml(r.o.flag)}">!</span> ` : ""}${orderState(r.o) !== "done" ? openIcon(1) : ""}${escapeHtml(r.o.serial || "")}</td>
           <td class="ltr">${escapeHtml(r.o.tzadi || "")}</td>
           <td>${escapeHtml(r.o.vehicle || "")}</td>
           <td>${escapeHtml(r.o.unit || "")}</td>
@@ -1709,7 +1710,7 @@ function renderOrders(){
     <div class="item-card">
       <div class="item-top">
         <div style="min-width:0;">
-          <span class="order-no">הזמנה ${escapeHtml(o.number || "—")}${o.serial ? ` · סודר ${escapeHtml(o.serial)}` : ""}</span>${o.endDate ? ` <span class="pill-open" style="background:var(--pri-tint);color:var(--pri-dark);">הסתיים ${escapeHtml(fmtDateIL(o.endDate))}</span>` : ""}
+          ${o.flag ? `<span class="flag-ic" title="${escapeHtml(o.flag)}">!</span> ` : ""}${orderState(o) !== "done" ? openIcon(1) : ""}<span class="order-no">הזמנה ${escapeHtml(o.number || "—")}${o.serial ? ` · סודר ${escapeHtml(o.serial)}` : ""}</span>${o.endDate ? ` <span class="pill-open" style="background:var(--pri-tint);color:var(--pri-dark);">הסתיים ${escapeHtml(fmtDateIL(o.endDate))}</span>` : ""}
           <div class="item-title" style="margin-top:6px;">${escapeHtml(c?.name || "חברה לא נבחרה")}</div>
           <div class="item-sub">${escapeHtml(fmtDateIL(o.date))}</div>
         </div>
@@ -2160,6 +2161,8 @@ const fileGet = id => fileOp("readonly", s => s.get(id));
 const fileDel = id => fileOp("readwrite", s => s.delete(id));
 
 function orderById(id){ return state.orders.find(o => o.id === id); }
+function openCount(lines){ const ids = new Set(lines.map(l => l.id)); return state.orders.filter(o => ids.has(o.budgetLineId) && orderState(o) !== "done").length; }
+function openIcon(n){ return n ? `<span class="flag-ic open" title="${n} שורות פתוחות בלי חשבונית סגורה">!</span> ` : ""; }
 function flagCount(lines){ const ids = new Set(lines.map(l => l.id)); return state.orders.filter(o => o.flag && ids.has(o.budgetLineId)).length; }
 function invoiceLineId(inv){ return inv.budgetLineId || orderById(inv.orderId)?.budgetLineId || ""; }
 // תעודת משלוח: נשמרת ומוצגת, אבל לא יורדת מהתקציב ולא תופסת את ההזמנה — רק חשבונית נספרת.
