@@ -18,6 +18,7 @@
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-auth-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-functions-compat.js"></script>
+<script>try{ const d = localStorage.getItem("tzahram_design"); if (d) document.documentElement.dataset.design = d; }catch(e){}</script>
 <style>
   /* Same design system as TripCost, re-tinted: olive (army) instead of teal, forklift amber as the accent. */
   :root{
@@ -77,22 +78,54 @@
   #app{max-width:760px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;}
 
   /* ---- Top bar ---- */
-  header.topbar{--hdr:#3F5427;position:sticky;top:var(--safe-t);z-index:20;background:var(--hdr);border-image:linear-gradient(var(--hdr),var(--hdr)) fill 0 / 0 / 0 100vmax;padding:16px 18px 14px;box-shadow:0 6px 14px -8px rgba(0,0,0,.35);}
-  /* חלק עליון בצבע מלא: טקסט בהיר, לשוניות שקופות-למחצה, הלשונית הפעילה בהירה */
-  header.topbar .brand .mark{color:#fff;}
-  header.topbar .brand .sub{color:rgba(255,255,255,.75);}
-  header.topbar .icon-btn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);color:#fff;}
-  header.topbar #syncStatusLine{background:rgba(255,255,255,.14);color:#fff;}
-  header.topbar #syncStatusLine.on .dot{background:#9BE07A;}
+  /* צבעי החלק העליון — משתנים, כדי שכל עיצוב יקבע אותם */
+  :root{ --hdr:#3F5427; --hdr-ink:#fff; --hdr-soft:rgba(255,255,255,.75); --hdr-glass:rgba(255,255,255,.1); --hdr-line:rgba(255,255,255,.24);
+         --hdr-active:#FFFEF9; --hdr-active-ink:#33441C; --hdr-active-n:#E7ECDB; --hdr-search:#FFFEF9; --hdr-search-line:transparent; }
+  header.topbar{position:sticky;top:var(--safe-t);z-index:20;background:var(--hdr);border-image:linear-gradient(var(--hdr),var(--hdr)) fill 0 / 0 / 0 100vmax;padding:16px 18px 14px;box-shadow:0 6px 14px -8px rgba(0,0,0,.35);}
+  header.topbar .brand .mark{color:var(--hdr-ink);}
+  header.topbar .brand .sub{color:var(--hdr-soft);}
+  header.topbar .icon-btn{background:var(--hdr-glass);border-color:var(--hdr-line);color:var(--hdr-ink);}
+  header.topbar #syncStatusLine{background:var(--hdr-glass);color:var(--hdr-ink);}
+  header.topbar #syncStatusLine.on .dot{background:#5FC46A;}
   header.topbar #syncStatusLine.err{background:#F6D9D1;color:#9B2C14;}
-  header.topbar .tabs{border-bottom-color:rgba(255,255,255,.25);}
-  header.topbar .tab-chip{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22);color:#fff;box-shadow:none;}
-  header.topbar .tab-chip .count{background:rgba(255,255,255,.18);color:#fff;}
-  header.topbar .tab-chip.active{background:#FFFEF9;border-color:#FFFEF9;color:#33441C;}
-  header.topbar .tab-chip.active .count{background:#E7ECDB;color:#33441C;}
-  header.topbar .search-input{background:#FFFEF9;border-color:transparent;color:#1F241A;}
-  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) header.topbar{--hdr:#24321A;} }
-  :root[data-theme="dark"] header.topbar{--hdr:#24321A;}
+  header.topbar .tabs{border-bottom-color:var(--hdr-line);}
+  header.topbar .tab-chip{background:var(--hdr-glass);border-color:var(--hdr-line);color:var(--hdr-ink);box-shadow:none;}
+  header.topbar .tab-chip .count{background:var(--hdr-glass);color:var(--hdr-ink);}
+  header.topbar .tab-chip.active{background:var(--hdr-active);border-color:var(--hdr-active);color:var(--hdr-active-ink);}
+  header.topbar .tab-chip.active .count{background:var(--hdr-active-n);color:var(--hdr-active-ink);}
+  header.topbar .search-input{background:var(--hdr-search);border-color:var(--hdr-search-line);color:var(--ink);}
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --hdr:#24321A; --hdr-active:#ECEEE6; --hdr-search:#1D2219; } }
+  :root[data-theme="dark"]{ --hdr:#24321A; --hdr-active:#ECEEE6; --hdr-search:#1D2219; }
+
+  /* ---- ארבעה עיצובים לבחירה (תפריט ← מראה). המצב הכהה של המכשיר גובר עליהם. ---- */
+  /* 1. פלדה וכתום — כחול-צפחה כהה עם כתום המלגזה */
+  :root[data-design="steel"]:not([data-theme="dark"]){
+    --bg:#F3F4F6; --card:#FFFFFF; --card-2:#E9ECF1; --ink:#1B2430; --ink-soft:#5B6676; --border:#DADFE7;
+    --pri:#2E4A6B; --pri-dark:#1E3550; --pri-tint:#E3EAF3; --amber:#F2A100; --amber-ink:#9A5B00; --amber-tint:#FFF1D6; --good:#21815A;
+    --hdr:#1B2735; --hdr-active:#F2A100; --hdr-active-ink:#1B2735; --hdr-active-n:rgba(27,39,53,.15); --hdr-search:#FFFFFF;
+    --radius-card:12px;
+  }
+  /* 2. נקי ולבן — חלק עליון לבן, ירוק עמוק כצבע פעולה בלבד */
+  :root[data-design="clean"]:not([data-theme="dark"]){
+    --bg:#F6F7F5; --card:#FFFFFF; --card-2:#F0F2EE; --ink:#1A1F1A; --ink-soft:#667066; --border:#E2E6E0;
+    --pri:#2F6B45; --pri-dark:#1F4D31; --pri-tint:#E6F1EA; --amber:#E39B17; --amber-ink:#8C5A00; --amber-tint:#FDF2DC; --good:#2F6B45;
+    --hdr:#FFFFFF; --hdr-ink:#1A1F1A; --hdr-soft:#667066; --hdr-glass:#F0F2EE; --hdr-line:#E2E6E0;
+    --hdr-active:#2F6B45; --hdr-active-ink:#FFFFFF; --hdr-active-n:rgba(255,255,255,.2); --hdr-search:#F0F2EE; --hdr-search-line:#E2E6E0;
+    --shadow:0 1px 2px rgba(0,0,0,.05); --radius-card:14px;
+  }
+  /* 3. חאקי מבצעי — גווני חול וחאקי, אדום-חלודה כהדגשה */
+  :root[data-design="khaki"]:not([data-theme="dark"]){
+    --bg:#F4EFE3; --card:#FFFCF4; --card-2:#EAE2CF; --ink:#2B2519; --ink-soft:#6E6450; --border:#DDD3BB;
+    --pri:#6B5A35; --pri-dark:#4B3E22; --pri-tint:#EDE5D0; --amber:#C2571A; --amber-ink:#8E3D0E; --amber-tint:#F7E3D3; --good:#4F7A3A;
+    --hdr:#5A4B2C; --hdr-active:#FFFCF4; --hdr-active-ink:#4B3E22; --hdr-active-n:#EDE5D0; --hdr-search:#FFFCF4;
+  }
+  /* 4. טורקיז מודרני — כחול-ירקרק כהה, מראה רך ועגול */
+  :root[data-design="teal"]:not([data-theme="dark"]){
+    --bg:#F1F6F6; --card:#FFFFFF; --card-2:#E4EFEE; --ink:#13292A; --ink-soft:#557072; --border:#D3E2E1;
+    --pri:#0F6E6A; --pri-dark:#0A4F4C; --pri-tint:#DDF0EE; --amber:#F59E0B; --amber-ink:#975F00; --amber-tint:#FEF3D7; --good:#13836B;
+    --hdr:#0B4F4C; --hdr-active:#FFFFFF; --hdr-active-ink:#0A4F4C; --hdr-active-n:#DDF0EE; --hdr-search:#FFFFFF;
+    --radius-card:22px;
+  }
   header.topbar.scrolled{border-bottom-color:var(--border);}
   .brand-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .brand{display:flex;align-items:center;gap:10px;min-width:0;}
@@ -345,6 +378,10 @@
   .settings-fold[open] > summary::after{transform:rotate(-90deg);}
   .settings-fold > summary small{font-weight:500;font-size:12.5px;color:var(--ink-soft);}
   .settings-body{padding:0 14px 14px;}
+  .design-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;}
+  .dp{display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 4px;border:1.5px solid var(--border);border-radius:12px;background:var(--card);font:inherit;font-size:12.5px;font-weight:700;color:var(--ink);cursor:pointer;}
+  .dp.on{border-color:var(--pri);box-shadow:0 0 0 2px var(--pri-tint);}
+  .dp-sw{width:100%;height:26px;border-radius:7px;border:1px solid rgba(0,0,0,.12);}
   .flag-ic.open{background:#F08C00;}
   .flag-note{font-size:12px;color:#D93025;font-weight:700;margin-top:2px;white-space:normal;}
   .flag-field label{display:flex;align-items:center;gap:6px;}
@@ -3553,6 +3590,9 @@ function renderMenuSummary(){
       <div><span>משוריין</span><b class="tnum" style="color:var(--amber-ink)">${fmtMoney(reserved)}</b></div>
       <div><span>פנוי</span><b class="tnum" style="color:${free < 0 ? "var(--danger)" : "var(--good)"}">${fmtMoney(free)}</b></div>
     </div>
+    <div class="field-group-title">מראה</div>
+    <div class="design-pick">${[["", "ירוק זית", "#3F5427", "#E0A526"], ["steel", "פלדה וכתום", "#1B2735", "#F2A100"], ["clean", "נקי ולבן", "#FFFFFF", "#2F6B45"], ["khaki", "חאקי מבצעי", "#5A4B2C", "#C2571A"], ["teal", "טורקיז", "#0B4F4C", "#F59E0B"]]
+      .map(([k, t, a1, a2]) => `<button type="button" class="dp ${(document.documentElement.dataset.design || "") === k ? "on" : ""}" data-design="${k}"><span class="dp-sw" style="background:linear-gradient(135deg, ${a1} 0 60%, ${a2} 60%);"></span>${t}</button>`).join("")}</div>
     <div class="field-group-title">דוחות</div>
     <div class="report-row" style="margin:0;">
       <button class="mini-btn pri" id="btnReportPdf">📄 דוח תקציבים PDF</button>
@@ -3565,6 +3605,9 @@ function renderMenuSummary(){
 $("menuSummary").addEventListener("click", e => {
   const rp = e.target.closest("#btnReportPdf"); if (rp) return budgetReportPdf(rp);
   if (e.target.closest("#btnReportXlsx")) return budgetReportXlsx();
+  const dp = e.target.closest("[data-design]");
+  if (dp){ const k = dp.dataset.design; if (k) document.documentElement.dataset.design = k; else delete document.documentElement.dataset.design;
+    try{ localStorage.setItem("tzahram_design", k); }catch(err){} renderMenuSummary(); return; }
   const op = e.target.closest("#btnOpenPdf"); if (op) return openOrdersReportPdf(op);
   if (e.target.closest("#btnOpenXlsx")) return openOrdersReportXlsx();
 });
