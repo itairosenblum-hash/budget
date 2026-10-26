@@ -453,7 +453,7 @@
 
   <main id="main">
     <div id="view"></div>
-    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">26/10/2026 13:10</span></div>
+    <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">—</span></div>
   </main>
 
   <div class="fab"><button id="btnAdd" aria-label="הוספה" title="הוספה">
@@ -1648,6 +1648,14 @@ document.querySelectorAll(".overlay .sheet").forEach(sh => {
   h2.replaceWith(top); top.append(h2, bar);
   const handle = sh.querySelector(".sheet-handle"); if (handle) top.prepend(handle);
 });
+/* "עודכן" בתחתית: זמן הפריסה האחרונה של האתר, לפי Last-Modified של השרת (מתעדכן לבד בכל עדכון) */
+(function updateVersionStamp(){
+  const fmt = d => isNaN(d) ? "" : new Intl.DateTimeFormat("he-IL", { timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(d).replace(/\./g, "/").replace(",", "");
+  const show = d => { const t = fmt(d); if (t) $("versionStamp").textContent = t; };
+  show(new Date(document.lastModified));
+  fetch(location.pathname.replace(/[^/]*$/, "") + "index.html?v=" + Date.now(), { method: "HEAD", cache: "no-store" })
+    .then(r => { const lm = r.headers.get("last-modified"); if (lm) show(new Date(lm)); }).catch(() => {});
+})();
 // כל טופס נפתח מהחלק העליון (ולא מהמקום שבו נסגר בפעם הקודמת)
 function openSheet(id){
   const ov = $(id), top = () => { ov.scrollTop = 0; ov.querySelectorAll(".sheet").forEach(sh => sh.scrollTop = 0); };
