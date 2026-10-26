@@ -300,6 +300,13 @@
   .menu-stats div{background:var(--card-2);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;}
   .menu-stats span{font-size:12.5px;color:var(--ink-soft);}
   .menu-stats b{font-size:16px;}
+  .settings-fold{border:1px solid var(--border);border-radius:12px;background:var(--card);}
+  .settings-fold > summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;align-items:baseline;gap:8px;font-weight:800;}
+  .settings-fold > summary::-webkit-details-marker{display:none;}
+  .settings-fold > summary::after{content:"‹";margin-inline-start:auto;color:var(--ink-soft);transition:transform .2s;}
+  .settings-fold[open] > summary::after{transform:rotate(-90deg);}
+  .settings-fold > summary small{font-weight:500;font-size:12.5px;color:var(--ink-soft);}
+  .settings-body{padding:0 14px 14px;}
   .flag-ic.open{background:#F08C00;}
   .flag-note{font-size:12px;color:#D93025;font-weight:700;margin-top:2px;white-space:normal;}
   .flag-field label{display:flex;align-items:center;gap:6px;}
@@ -601,7 +608,9 @@
     <h2>תפריט</h2>
     <div id="menuSummary"></div>
     <div class="divider"></div>
-    <div class="field-group-title" style="margin-top:0;">הגדרות וסנכרון</div>
+    <details class="settings-fold" id="settingsFold">
+    <summary><span>⚙️ הגדרות</span><small>סנכרון, שיתוף, גיבוי ושחזור</small></summary>
+    <div class="settings-body">
     <div id="syncPanel"></div>
     <div class="divider"></div>
     <details class="cfg" id="cfgDetails">
@@ -618,6 +627,8 @@
       <button class="btn-ghost" style="flex:1" id="btnExport">גיבוי לקובץ JSON</button>
       <label class="btn-ghost" style="flex:1;text-align:center;">שחזור / ייבוא שורות<input type="file" id="importInput" accept="application/json,.json" hidden></label>
     </div>
+    </div>
+    </details>
     <button class="btn-ghost" style="width:100%;margin-top:16px;" data-close>סגירה</button>
   </div>
 </div>
@@ -3268,8 +3279,8 @@ $("menuSummary").addEventListener("click", e => {
   const rp = e.target.closest("#btnReportPdf"); if (rp) return budgetReportPdf(rp);
   if (e.target.closest("#btnReportXlsx")) return budgetReportXlsx();
 });
-$("btnSettings").onclick = () => { renderMenuSummary(); renderSyncPanel(); openSheet("overlaySettings"); };
-$("syncStatusLine").onclick = () => { renderMenuSummary(); renderSyncPanel(); openSheet("overlaySettings"); };
+$("btnSettings").onclick = () => { $("settingsFold").open = false; renderMenuSummary(); renderSyncPanel(); openSheet("overlaySettings"); };
+$("syncStatusLine").onclick = () => { $("settingsFold").open = true; renderMenuSummary(); renderSyncPanel(); openSheet("overlaySettings"); };
 window.addEventListener("scroll", () => $("topbar").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
 document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".overlay.show").forEach(o => o.classList.remove("show")); });
 
@@ -3505,7 +3516,7 @@ async function pushNow(){
 }
 
 function signIn(){
-  if (!fbAuth){ toast("צריך קודם להגדיר את Firebase"); $("cfgDetails").open = true; return; }
+  if (!fbAuth){ toast("צריך קודם להגדיר את Firebase"); $("cfgDetails").open = true; $("settingsFold").open = true; return; }
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   fbAuth.signInWithPopup(provider).catch(e => {
@@ -3520,7 +3531,7 @@ function renderSyncPanel(){
   const cfg = loadFirebaseConfig();
   if (!cfg){
     p.innerHTML = `<p class="hint" style="margin:0 0 12px;">כרגע הנתונים נשמרים רק במכשיר הזה. כדי לסנכרן בין הטלפון למחשב צריך להגדיר פרויקט Firebase (למטה).</p>`;
-    $("cfgDetails").open = true;
+    $("cfgDetails").open = true; $("settingsFold").open = true;
     return;
   }
   if (cloudUser){
