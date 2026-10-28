@@ -232,6 +232,7 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
   .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);margin-top:6px;}
   .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-left:4px;vertical-align:-1px;background:var(--pri);}
   .legend span.r::before{background:var(--amber);}
+  .legend span.plain::before{display:none;}
   .st-pill{font-size:11.5px;font-weight:800;border-radius:99px;padding:1px 8px;white-space:nowrap;}
   .st-open{background:var(--amber-tint);color:var(--amber-ink);}
   .st-wait{background:var(--card-2);color:var(--ink-soft);}
@@ -515,6 +516,82 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
     .sheet{border-radius:22px;max-width:480px;max-height:86vh;}
     .fab{left:28px;bottom:28px;}
   }
+
+  /* ================= תצוגת מחשב (לפטופ ומעלה) =================
+     תפריט צד קבוע מימין, אזור עבודה רחב משמאל. במובייל שום דבר לא משתנה. */
+  .desk-bar, .side-add, .side-menu, .kpi-strip{display:none;}
+  @media (min-width: 1024px){
+    #app{max-width:none;margin:0;display:grid;grid-template-columns:272px minmax(0,1fr);min-height:100vh;}
+
+    /* --- תפריט הצד --- */
+    header.topbar{grid-column:1;grid-row:1;position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:14px;
+      padding:22px 16px 18px;border-image:none;box-shadow:none;border-inline-end:1px solid var(--hdr-line);}
+    header.topbar .brand img{width:46px;height:46px;}
+    header.topbar .brand .sub{white-space:normal;}
+    header.topbar #btnSettings{display:none;}
+    #syncStatusLine{margin-top:0;align-self:flex-start;}
+    .side-add{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;border-radius:14px;padding:13px 14px;
+      background:var(--amber);color:#1E1A10;font:inherit;font-size:16px;font-weight:900;cursor:pointer;box-shadow:0 6px 16px -6px rgba(0,0,0,.4);}
+    .side-add:hover{filter:brightness(1.05);}
+    .side-add:active{transform:scale(.98);}
+    .tabs{display:flex;flex-direction:column;gap:6px;padding:4px 0 0;border:none;}
+    .tab-chip{justify-content:flex-start;padding:12px 14px;font-size:16px;gap:10px;border-radius:12px;}
+    .tab-chip .t-ic{display:inline !important;font-size:18px;}
+    .tab-chip .count{margin-inline-start:auto;font-size:12.5px;padding:1px 9px;}
+    header.topbar .tab-chip:not(.active){background:transparent;border-color:transparent;}
+    header.topbar .tab-chip:not(.active):hover{background:var(--hdr-glass);border-color:var(--hdr-line);}
+    .side-menu{display:flex;align-items:center;gap:10px;margin-top:auto;width:100%;border:1px solid var(--hdr-line);border-radius:12px;
+      background:var(--hdr-glass);color:var(--hdr-ink);padding:11px 14px;font:inherit;font-size:14.5px;font-weight:700;cursor:pointer;text-align:right;}
+    .side-menu:hover{filter:brightness(1.08);}
+
+    /* --- אזור העבודה --- */
+    main{grid-column:2;grid-row:1;padding:0 32px 60px;min-width:0;}
+    #view, .desk-bar{max-width:1560px;}
+    .desk-bar{display:flex;align-items:center;gap:20px;position:sticky;top:0;z-index:15;background:var(--bg);
+      padding:20px 0 14px;border-bottom:1px solid var(--border);margin-bottom:6px;}
+    .desk-bar h1{margin:0;font-size:28px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .desk-bar .search-input{margin:0;width:420px;max-width:45%;padding:11px 14px;}
+    .fab{display:none;}
+    .seg{max-width:420px;}
+
+    /* שורת סיכום בראש מסך התקציב */
+    .kpi-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px;}
+    .kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:var(--shadow);padding:14px 16px;min-width:0;}
+    .kpi span{display:block;font-size:13px;font-weight:700;color:var(--ink-soft);}
+    .kpi b{display:block;font-size:24px;font-weight:900;margin-top:4px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .kpi.warn b{color:var(--amber-ink);} .kpi.good b{color:var(--good);} .kpi.bad b{color:var(--danger);}
+    .kpi-bar{grid-column:1 / -1;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-card);padding:12px 16px;box-shadow:var(--shadow);}
+    .kpi-bar .bar{height:12px;}
+
+    /* פאנל הסינון — כרטיס רגיל במקום פס ברוחב מלא */
+    .filter-panel{margin:16px 0 0;border-image:none;border:1px solid var(--border);border-radius:var(--radius-card);padding:16px;}
+
+    /* חברות: כרטיסיות בכמה עמודות */
+    #view > .r-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));}
+    #view > .r-list .r-row{border-inline-start:1px solid var(--border);margin-inline-start:-1px;}
+    #view > .r-list .r-row:last-child{border-bottom:1px solid var(--border);}
+    #view > .r-list .r-main{padding:14px 16px;}
+
+    /* 1007: קבוצות החברות זו לצד זו */
+    #view:has(> .r-grp){display:grid;grid-template-columns:repeat(auto-fill,minmax(460px,1fr));gap:6px 22px;align-items:start;}
+    #view:has(> .r-grp) > :not(.r-grp){grid-column:1 / -1;}
+
+    /* טבלת הסעיף — ברוחב מלא, בלי גלילה צידית כשיש מקום */
+    table.ledger{font-size:14px;}
+
+    .sheet{max-width:620px;}
+    .toast{bottom:32px;}
+  }
+  /* מסך רחב: הסינון בעמודה קבועה משמאל, הרשימה הגדולה מימין */
+  @media (min-width: 1200px){
+    #view:has(> .filter-panel){display:grid;grid-template-columns:minmax(0,1fr) 330px;grid-template-rows:auto auto 1fr;gap:0 24px;align-items:start;}
+    #view:has(> .filter-panel) > *{grid-column:1;}
+    #view:has(> .filter-panel) > .filter-panel{grid-column:2;grid-row:1 / 4;position:sticky;top:96px;}
+    #view:has(> .filter-panel) > .kpi-strip ~ .section-title{margin-top:22px;}
+  }
+  @media (min-width: 1500px){
+    .co-list{display:grid;grid-template-columns:1fr 1fr;align-items:start;gap:10px;}
+  }
 </style>
 </head>
 <body>
@@ -534,11 +611,17 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
       </button>
     </div>
     <button id="syncStatusLine" type="button"></button>
+    <button class="side-add" id="btnAddSide" type="button"><span style="font-size:20px;line-height:1;">+</span><span id="btnAddSideLbl">הוספה</span></button>
     <nav class="tabs" id="tabs"></nav>
+    <button class="side-menu" id="btnMenuSide" type="button">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>סיכום, דוחות והגדרות</span>
+    </button>
     <input type="search" class="search-input" id="searchInput" placeholder="🔍 חיפוש...">
   </header>
 
   <main id="main">
+    <div class="desk-bar" id="deskBar"><h1 id="deskTitle">תקציב</h1></div>
     <div id="view"></div>
     <div id="versionFooter">תקציב אחזקה · עודכן <span id="versionStamp" dir="ltr">—</span></div>
   </main>
@@ -1200,6 +1283,13 @@ function renderTabs(){
     : activeTab === "orders" ? "🔍 חיפוש הזמנה לפי מספר, צ', חברה או כלי..."
     : activeTab === "invoices" ? "🔍 חיפוש חשבונית לפי מספר, חברה או הזמנה..."
     : openLineId ? "🔍 חיפוש שורה לפי צ', כלי, יחידה או תיאור..." : "🔍 חיפוש סעיף לפי חברה או מספר הזמנה...";
+  // תצוגת מחשב: כותרת אזור העבודה וכפתור ההוספה שבתפריט הצד
+  const ol = activeTab === "budget" && openLineId ? budgetById(openLineId) : null;
+  $("deskTitle").textContent = activeTab === "companies" ? "חברות" : activeTab === "orders" ? "הזמנות עבודה (1007)"
+    : activeTab === "invoices" ? "חשבוניות"
+    : ol ? `סעיף ${ol.index || ""} · ${companyById(ol.companyId)?.name || ""}` : "תקציבים";
+  $("btnAddSideLbl").textContent = activeTab === "companies" ? "חברה חדשה" : activeTab === "orders" ? "הזמנה חדשה (1007)"
+    : activeTab === "invoices" ? "חשבונית חדשה" : ol ? "שורה חדשה בסעיף" : "סעיף תקציב חדש";
 
 }
 
@@ -1252,6 +1342,18 @@ function renderBudget(){
     .join(" ").toLowerCase().includes(search.toLowerCase()))
     .filter(l => !care || state.orders.some(o => o.budgetLineId === l.id && needsCare(o)))
     .filter(l => !expOnly || lineExpiring(l));
+  // סיכום כולל (מוצג רק במחשב) — לפי הסינון שנבחר
+  if (all.length) html += `
+      <div class="kpi-strip">
+        <div class="kpi"><span>סה"כ תקציב</span><b>${fmtMoney(total)}</b></div>
+        <div class="kpi"><span>נוצל בפועל</span><b>${fmtMoney(spent)}</b></div>
+        <div class="kpi warn"><span>משוריין</span><b>${fmtMoney(reserved)}</b></div>
+        <div class="kpi ${free < 0 ? "bad" : "good"}"><span>פנוי</span><b>${fmtMoney(free)}</b></div>
+        <div class="kpi-bar">${barHtml(spent, reserved, total)}
+          <div class="legend"><span>נוצל ${total ? Math.round(spent / total * 100) : 0}%</span><span class="r">משוריין ${total ? Math.round(reserved / total * 100) : 0}%</span>
+          <span class="plain" style="margin-inline-start:auto;">${lines.length} סעיפים · ${filt.budgetStatus === "closed" ? "סגורים" : filt.budgetStatus === "all" ? "הכל" : "פעילים"}</span></div>
+        </div>
+      </div>`;
   if (all.length){
     const sk = filt.budgetSort || "name";
     html += `
@@ -3647,6 +3749,18 @@ $("menuSummary").addEventListener("click", e => {
 $("btnSettings").onclick = () => { $("settingsFold").open = false; renderMenuSummary(); renderSyncPanel(); openSheet("overlaySettings"); };
 $("syncStatusLine").onclick = () => { $("settingsFold").open = true; renderMenuSummary(); renderSyncPanel(); openSheet("overlaySettings"); };
 window.addEventListener("scroll", () => $("topbar").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
+
+/* תצוגת מחשב: כפתורי תפריט הצד, ושדה החיפוש עובר לראש אזור העבודה */
+$("btnAddSide").onclick = () => $("btnAdd").click();
+$("btnMenuSide").onclick = () => $("btnSettings").click();
+const deskMQ = window.matchMedia("(min-width: 1024px)");
+function placeForViewport(){
+  const s = $("searchInput");
+  if (deskMQ.matches){ if (s.parentElement !== $("deskBar")) $("deskBar").appendChild(s); }
+  else if (s.parentElement !== $("topbar")) $("topbar").appendChild(s);
+}
+deskMQ.addEventListener ? deskMQ.addEventListener("change", placeForViewport) : deskMQ.addListener(placeForViewport);
+placeForViewport();
 document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".overlay.show").forEach(o => o.classList.remove("show")); });
 
 /* ---------- ייבוא שורות מקובץ (למשל דף מודפס שהוקלד) ----------
