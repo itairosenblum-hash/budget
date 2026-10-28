@@ -351,6 +351,10 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
   .field.uncertain input,.field.uncertain select{border:2px solid var(--amber) !important;}
   .field.uncertain::after{content:"לא זוהה בוודאות — כדאי לבדוק מול החשבונית";display:block;font-size:12px;color:var(--amber-ink);margin-top:4px;}
   .file-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border:1px dashed var(--border);border-radius:var(--radius-sm);background:var(--card);margin-bottom:14px;}
+  .file-row.drag{border-color:var(--accent,#1a73e8);border-style:solid;background:rgba(26,115,232,.08);}
+  #dropHint{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(15,30,60,.45);pointer-events:none;}
+  #dropHint.show{display:flex;}
+  #dropHint div{background:var(--card,#fff);color:var(--ink,#111);border:3px dashed #1a73e8;border-radius:18px;padding:28px 40px;font-size:20px;font-weight:800;}
   .file-row .fname{flex:1;min-width:120px;font-size:14px;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .sec-head{background:var(--pri);color:#fff;border-radius:16px 16px 0 0;padding:12px 14px;display:flex;align-items:center;gap:10px;}
   .sec-idx{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;flex:none;}
@@ -756,7 +760,7 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
     <h2 id="invoiceFormTitle">חשבונית חדשה</h2>
     <div class="file-row">
       <label class="mini-btn" style="cursor:pointer;">📎 צירוף קובץ<input type="file" id="iFileInput" accept="image/*,application/pdf" hidden></label>
-      <span class="fname" id="iFileName">לא צורף קובץ</span>
+      <span class="fname" id="iFileName">לא צורף קובץ — אפשר גם לגרור לכאן</span>
       <button class="mini-btn" id="btnScanFile" type="button">🔄 קריאה מחדש</button>
       <button class="mini-btn danger" id="btnRemoveFile" type="button" aria-label="הסרת הקובץ">✕</button>
     </div>
@@ -787,6 +791,7 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
 </div>
 <datalist id="dlDocType"><option value="חשבונית מס"><option value="חשבונית מס קבלה"><option value="חשבון עסקה"><option value="קבלה"><option value="תעודת משלוח"></datalist>
 <input type="file" id="scanInput" accept="image/*,application/pdf" hidden>
+<div id="dropHint"><div id="dropHintTxt">📥 משחררים כאן להעלאת החשבונית</div></div>
 
 <!-- Stamp sheet -->
 <div class="overlay" id="overlayStamp">
@@ -2875,7 +2880,7 @@ function fillOrderSelect(keep){
   if (keep && [...$("iOrder").options].some(op => op.value === keep)) $("iOrder").value = keep;
 }
 function renderFileRow(name){
-  $("iFileName").textContent = name || "לא צורף קובץ";
+  $("iFileName").textContent = name || "לא צורף קובץ — אפשר גם לגרור לכאן";
   $("btnScanFile").style.display = (pendingFile) ? "" : "none";
   $("btnRemoveFile").style.display = name ? "" : "none";
 }
@@ -2949,6 +2954,32 @@ async function pickFile(f, autoScan){
 }
 // כל העלאת קובץ נקראת מיד אוטומטית (גם מ"צירוף קובץ" בתוך הטופס)
 $("iFileInput").onchange = e => { pickFile(e.target.files[0], true); e.target.value = ""; };
+// גרירת קובץ (תמונה / PDF) מהמחשב: לתוך טופס החשבונית הפתוח, או לכל מקום באתר — פותח חשבונית חדשה
+(() => {
+  let depth = 0;
+  const hasFile = e => [...(e.dataTransfer?.types || [])].includes("Files");
+  const invOpen = () => $("overlayInvoice").classList.contains("show");
+  const otherOpen = () => !invOpen() && !!document.querySelector(".overlay.show");
+  const hint = $("dropHint"), row = () => document.querySelector("#overlayInvoice .file-row");
+  const hide = () => { depth = 0; hint.classList.remove("show"); row()?.classList.remove("drag"); };
+  document.addEventListener("dragenter", e => {
+    if (!hasFile(e) || otherOpen()) return;
+    e.preventDefault(); depth++;
+    $("dropHintTxt").textContent = invOpen() ? "📥 משחררים כאן לצירוף הקובץ לחשבונית" : "📥 משחררים כאן — תיפתח חשבונית חדשה";
+    hint.classList.add("show"); row()?.classList.add("drag");
+  });
+  document.addEventListener("dragover", e => { if (hasFile(e) && !otherOpen()){ e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } });
+  document.addEventListener("dragleave", e => { if (!hasFile(e)) return; if (--depth <= 0) hide(); });
+  document.addEventListener("drop", e => {
+    if (!hasFile(e)) return;
+    e.preventDefault(); hide();
+    if (otherOpen()) return;
+    const f = e.dataTransfer.files[0]; if (!f) return;
+    if (e.dataTransfer.files.length > 1) toast("צורף רק הקובץ הראשון");
+    if (!invOpen()) openInvoiceForm(null);
+    pickFile(f, true);
+  });
+})();
 $("scanInput").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; openInvoiceForm(null); pickFile(f, true); };
 $("btnScanFile").onclick = () => scanPendingFile();
 $("btnRemoveFile").onclick = () => { pendingFile = null; pendingFileRemoved = true; renderFileRow(""); };
