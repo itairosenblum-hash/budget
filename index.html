@@ -2903,6 +2903,11 @@ function fillOrderSelect(keep){
   }).join("");
   if (keep && [...$("iOrder").options].some(op => op.value === keep)) $("iOrder").value = keep;
 }
+// סעיף התקציב מוצג לפי ה-1007 שנבחרה (כשלחשבונית אין סעיף משלה)
+function syncInvoiceBudget(){
+  const o = orderById($("iOrder").value);
+  if (o?.budgetLineId && budgetById(o.budgetLineId)) $("iBudget").value = o.budgetLineId;
+}
 function renderFileRow(name){
   $("iFileName").textContent = name || "לא צורף קובץ — אפשר גם לגרור לכאן";
   $("btnScanFile").style.display = (pendingFile) ? "" : "none";
@@ -2929,6 +2934,7 @@ function openInvoiceForm(id, preset){
   setNum("iVat", i?.vat || null);
   setNum("iTotal", i?.total || null);
   $("iBudget").value = i?.budgetLineId || "";
+  if (!i?.budgetLineId) syncInvoiceBudget();
   $("iDesc").value = i?.description || "";
   $("newCompanyHint").innerHTML = "";
   setUncertain({});
@@ -2943,10 +2949,12 @@ $("iCompany").addEventListener("change", () => {
     const open = state.orders.filter(o => o.companyId === $("iCompany").value && !invoiceForOrder(o.id));
     if (open.length === 1) $("iOrder").value = open[0].id;
   }
+  syncInvoiceBudget();
 });
 $("iOrder").addEventListener("change", () => {
   const o = orderById($("iOrder").value); if (!o) return;
   if (!$("iCompany").value){ $("iCompany").value = o.companyId; fillOrderSelect(o.id); }
+  syncInvoiceBudget();
 });
 // מע"מ: אם יש שני סכומים מתוך שלושה, משלימים את השלישי.
 ["iBeforeVat", "iVat"].forEach(id => $(id).addEventListener("change", () => {
@@ -3225,6 +3233,7 @@ function applyScan(r){
   fillOrderSelect(preset && (!c || preset.companyId === c.id) ? preset.id : "");
   const m = matchOrder(r, $("iCompany").value);
   if (m && (!$("iOrder").value || m.sure)){ $("iOrder").value = m.o.id; if (!$("iCompany").value){ $("iCompany").value = m.o.companyId; fillOrderSelect(m.o.id); } }
+  syncInvoiceBudget();
   if (!$("iOrder").value){
     const open = state.orders.filter(o => o.companyId === $("iCompany").value && !invoiceForOrder(o.id));
     if (open.length) toast(`לא זוהתה ה-1007 של החשבונית — צריך לבחור אותה (${open.length} פתוחות לחברה)`);
@@ -3257,7 +3266,7 @@ $("btnSaveInvoice").onclick = async () => {
     beforeVat: numOf("iBeforeVat") || 0,
     vat: numOf("iVat") || 0,
     total,
-    budgetLineId: $("iBudget").value,
+    budgetLineId: $("iBudget").value === (orderById($("iOrder").value)?.budgetLineId || "\u0000") ? "" : $("iBudget").value,
     description: $("iDesc").value.trim(),
   });
   try{
