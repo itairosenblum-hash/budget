@@ -2188,16 +2188,23 @@ function budgetLabel(b){
 }
 
 
+// הזמנה פתוחה (בלי חשבונית סגורה) שתאריכה לפני יותר מחודשיים — מסומנת בסימן קריאה אדום
+function staleOrder(o){
+  if (!o.date || orderState(o) === "done") return false;
+  const d = new Date(); d.setMonth(d.getMonth() - 2);
+  const cut = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return String(o.date) < cut;
+}
 function orderRowHtml(o){
   const c = companyById(o.companyId), b = budgetById(o.budgetLineId);
   const inv = invoiceForOrder(o.id), dn = deliveryForOrder(o.id);
   const amt = orderPrices(o)?.total || orderReserved(o);
   const open = openOrderRows.has(o.id);
-  const sub = [o.date && escapeHtml(fmtDateIL(o.date)), o.tzadi && `צ' <span dir="ltr">${escapeHtml(o.tzadi)}</span>`, o.vehicle && escapeHtml(o.vehicle), o.unit && escapeHtml(o.unit)].filter(Boolean).join(" · ");
+  const sub = [o.date && escapeHtml(fmtDateIL(o.date)) + (staleOrder(o) ? ` <b style="color:#D93025">· מעל חודשיים</b>` : ""), o.tzadi && `צ' <span dir="ltr">${escapeHtml(o.tzadi)}</span>`, o.vehicle && escapeHtml(o.vehicle), o.unit && escapeHtml(o.unit)].filter(Boolean).join(" · ");
   return `
     <div class="r-row ${open ? "open" : ""}">
       <button class="r-main" data-toggle-orow="${o.id}">
-        <span class="r-ic">${o.flag ? `<span class="flag-ic" title="${escapeHtml(o.flag)}">!</span>` : ""}${orderState(o) !== "done" ? openIcon(1) : ""}</span>
+        <span class="r-ic">${o.flag ? `<span class="flag-ic" title="${escapeHtml(o.flag)}">!</span>` : ""}${staleOrder(o) ? `<span class="flag-ic" title="פתוחה מעל חודשיים">!</span>` : orderState(o) !== "done" ? openIcon(1) : ""}</span>
         <span class="r-txt">
           <span class="r-title">${escapeHtml(String(o.repairs || "ללא תיאור").split("\n")[0])}</span>
           <span class="r-sub">${sub}</span>
