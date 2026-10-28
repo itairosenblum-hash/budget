@@ -2905,8 +2905,12 @@ function fillOrderSelect(keep){
 }
 // סעיף התקציב מוצג לפי ה-1007 שנבחרה (כשלחשבונית אין סעיף משלה)
 function syncInvoiceBudget(){
-  const o = orderById($("iOrder").value);
-  if (o?.budgetLineId && budgetById(o.budgetLineId)) $("iBudget").value = o.budgetLineId;
+  const o = orderById($("iOrder").value); if (!o) return;
+  if (o.budgetLineId && budgetById(o.budgetLineId)){ $("iBudget").value = o.budgetLineId; return; }
+  // 1007 שלא שויכה לסעיף: מספר ההזמנה שלה הוא מספר הסעיף
+  const num = digitsOnly(o.number);
+  const l = num && (state.budgetLines.find(l => digitsOnly(l.orderNumber) === num && l.companyId === o.companyId) || state.budgetLines.find(l => digitsOnly(l.orderNumber) === num));
+  if (l) $("iBudget").value = l.id;
 }
 function renderFileRow(name){
   $("iFileName").textContent = name || "לא צורף קובץ — אפשר גם לגרור לכאן";
