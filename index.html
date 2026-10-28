@@ -520,11 +520,18 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
   /* ================= תצוגת מחשב (לפטופ ומעלה) =================
      תפריט צד קבוע מימין, אזור עבודה רחב משמאל. במובייל שום דבר לא משתנה. */
   .desk-bar, .side-add, .side-menu, .kpi-strip{display:none;}
+  /* במחשב כל האתר מוקטן מעט (85%) כדי שייכנס יותר על המסך */
+  :root{--dz:1;}
   @media (min-width: 1024px){
-    #app{max-width:none;margin:0;display:grid;grid-template-columns:272px minmax(0,1fr);min-height:100vh;}
+    :root{--dz:.85;}
+    body{zoom:var(--dz);}
+    #app{min-height:calc(100vh / var(--dz));}
+    .overlay, .lift-overlay{width:calc(100vw / var(--dz));height:calc(100vh / var(--dz));}
+    .sheet{max-height:calc(86vh / var(--dz));}
+    #app{max-width:none;margin:0;display:grid;grid-template-columns:272px minmax(0,1fr);}
 
     /* --- תפריט הצד --- */
-    header.topbar{grid-column:1;grid-row:1;position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:14px;
+    header.topbar{grid-column:1;grid-row:1;position:sticky;top:0;height:calc(100vh / var(--dz));overflow-y:auto;display:flex;flex-direction:column;gap:14px;
       padding:22px 16px 18px;border-image:none;box-shadow:none;border-inline-end:1px solid var(--hdr-line);}
     header.topbar .brand img{width:46px;height:46px;}
     header.topbar .brand .sub{white-space:normal;}
