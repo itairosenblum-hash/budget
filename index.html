@@ -1224,6 +1224,12 @@ function migrateState(s){
       o.price = null;
     }
   }
+  // סודר עם חשבונית ובלי תאריך סיום — תאריך הסיום הוא תאריך החשבונית (גם לחשבוניות שהועלו לפני שזה נוסף)
+  for (const o of s.orders || []){
+    if (o.endDate) continue;
+    const inv = (s.invoices || []).find(i => i.orderId === o.id && i.date && !/משלוח/.test(String(i.docType || "")));
+    if (inv){ o.endDate = inv.date; o.endDateFromInv = inv.id; }
+  }
   return s;
 }
 function loadState(){
