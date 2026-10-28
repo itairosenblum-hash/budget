@@ -353,6 +353,14 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
   .field.uncertain::after{content:"לא זוהה בוודאות — כדאי לבדוק מול החשבונית";display:block;font-size:12px;color:var(--amber-ink);margin-top:4px;}
   .file-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border:1px dashed var(--border);border-radius:var(--radius-sm);background:var(--card);margin-bottom:14px;}
   .file-row.drag{border-color:var(--accent,#1a73e8);border-style:solid;background:rgba(26,115,232,.08);}
+  .gm-search{display:flex;gap:8px;}
+  .gm-search input{flex:1;min-width:0;}
+  .gm-msg{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--card);padding:10px 12px;margin-bottom:8px;}
+  .gm-top{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--ink-soft);}
+  .gm-from{font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .gm-subj{font-size:14px;margin:2px 0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .gm-atts{display:flex;flex-wrap:wrap;gap:6px;}
+  .gm-atts .mini-btn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   #dropHint{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(15,30,60,.45);pointer-events:none;}
   #dropHint.show{display:flex;}
   #dropHint div{background:var(--card,#fff);color:var(--ink,#111);border:3px dashed #1a73e8;border-radius:18px;padding:28px 40px;font-size:20px;font-weight:800;}
@@ -762,6 +770,7 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
     <div class="file-row">
       <label class="mini-btn" style="cursor:pointer;">📎 צירוף קובץ<input type="file" id="iFileInput" accept="image/*,application/pdf" hidden></label>
       <span class="fname" id="iFileName">לא צורף קובץ — אפשר גם לגרור לכאן</span>
+      <button class="mini-btn" id="btnGmail" type="button">📧 מ-Gmail</button>
       <button class="mini-btn" id="btnScanFile" type="button">🔄 קריאה מחדש</button>
       <button class="mini-btn danger" id="btnRemoveFile" type="button" aria-label="הסרת הקובץ">✕</button>
     </div>
@@ -792,6 +801,20 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
 </div>
 <datalist id="dlDocType"><option value="חשבונית מס"><option value="חשבונית מס קבלה"><option value="חשבון עסקה"><option value="קבלה"><option value="תעודת משלוח"></datalist>
 <input type="file" id="scanInput" accept="image/*,application/pdf" hidden>
+<!-- Gmail picker -->
+<div class="overlay" id="overlayGmail" style="z-index:60;">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2>קובץ מ-Gmail</h2>
+    <form id="gmForm" class="gm-search">
+      <input type="search" id="gmQuery" placeholder="🔍 חיפוש: שם חברה, מספר חשבונית, שולח...">
+      <button class="mini-btn pri" type="submit">חיפוש</button>
+    </form>
+    <div class="hint" style="margin:6px 0 10px;">מוצגים מיילים מ-90 הימים האחרונים עם PDF או תמונה מצורפים. לוחצים על הקובץ כדי לצרף אותו.</div>
+    <div id="gmList"></div>
+    <div class="sheet-actions"><button class="btn-ghost" data-close>סגירה</button></div>
+  </div>
+</div>
 <div id="dropHint"><div id="dropHintTxt">📥 משחררים כאן להעלאת החשבונית</div></div>
 
 <!-- Stamp sheet -->
@@ -2955,6 +2978,122 @@ async function pickFile(f, autoScan){
 }
 // כל העלאת קובץ נקראת מיד אוטומטית (גם מ"צירוף קובץ" בתוך הטופס)
 $("iFileInput").onchange = e => { pickFile(e.target.files[0], true); e.target.value = ""; };
+/* ---------- משיכת קובץ מצורף מ-Gmail (קריאה בלבד) ----------
+   מבקשים מגוגל הרשאת gmail.readonly דרך אותה התחברות של Firebase, ומקבלים טוקן לשעה.
+   הטוקן נשמר רק בלשונית הזו (sessionStorage) ולא נשלח לשום מקום חוץ מ-Gmail. */
+const GM_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+const GM_KEY = "tzahram_gm_token";
+function gmCachedToken(){
+  try{ const t = JSON.parse(sessionStorage.getItem(GM_KEY)); return t && t.exp > Date.now() ? t.token : null; }catch(e){ return null; }
+}
+async function gmToken(force){
+  if (!force){ const t = gmCachedToken(); if (t) return t; }
+  if (!fbAuth) throw new Error("צריך קודם להתחבר לסנכרון");
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.addScope(GM_SCOPE);
+  if (cloudUser?.email) provider.setCustomParameters({ login_hint: cloudUser.email });
+  let res;
+  try{
+    res = cloudUser ? await cloudUser.reauthenticateWithPopup(provider) : await fbAuth.signInWithPopup(provider);
+  }catch(e){
+    if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") throw new Error("ההתחברות ל-Gmail בוטלה");
+    if (e.code === "auth/popup-blocked") throw new Error("הדפדפן חסם את החלון — צריך לאפשר חלונות קופצים לאתר");
+    if (e.code === "auth/user-mismatch") throw new Error("נבחר חשבון אחר מזה שמחובר לאתר");
+    throw e;
+  }
+  const token = res?.credential?.accessToken;
+  if (!token) throw new Error("לא התקבלה הרשאה ל-Gmail");
+  try{ sessionStorage.setItem(GM_KEY, JSON.stringify({ token, exp: Date.now() + 55 * 60e3 })); }catch(e){}
+  return token;
+}
+async function gmFetch(path, retried){
+  const token = await gmToken(retried);
+  const r = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/" + path, { headers: { Authorization: "Bearer " + token } });
+  if (r.status === 401 && !retried){ try{ sessionStorage.removeItem(GM_KEY); }catch(e){} return gmFetch(path, true); }
+  if (!r.ok){
+    let msg = ""; try{ msg = (await r.json()).error?.message || ""; }catch(e){}
+    if (r.status === 403 && /has not been used|disabled/i.test(msg)) throw new Error("צריך להפעיל את Gmail API בפרויקט ב-Google Cloud");
+    if (r.status === 403) throw new Error("אין הרשאה לקרוא את המייל — צריך לאשר גישה ל-Gmail");
+    throw new Error(msg || "שגיאה " + r.status);
+  }
+  return r.json();
+}
+const GM_EXT_TYPE = { pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", heic: "image/heic", webp: "image/webp" };
+function gmAttType(p){
+  const ext = String(p.filename || "").split(".").pop().toLowerCase();
+  if (p.mimeType === "application/pdf" || /^image\//.test(p.mimeType)) return p.mimeType;
+  return GM_EXT_TYPE[ext] || null;
+}
+function gmAttachments(payload){
+  const out = [];
+  (function walk(p){
+    if (!p) return;
+    if (p.filename && p.body?.attachmentId){
+      const type = gmAttType(p);
+      // מדלגים על תמונות קטנות (לוגו / חתימה במייל)
+      if (type && !(type.startsWith("image/") && (p.body.size || 0) < 25e3)) out.push({ name: p.filename, type, id: p.body.attachmentId, size: p.body.size || 0 });
+    }
+    (p.parts || []).forEach(walk);
+  })(payload);
+  return out;
+}
+const gmCache = new Map();   // messageId -> { from, subject, date, atts }
+function gmHeader(m, name){ return (m.payload?.headers || []).find(h => h.name.toLowerCase() === name)?.value || ""; }
+function gmFromName(v){ const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>/.exec(v); return m ? (m[1] || m[2]) : v; }
+async function gmSearch(text){
+  const list = $("gmList");
+  list.innerHTML = `<div class="empty"><p>טוען מיילים…</p></div>`;
+  try{
+    const q = `has:attachment newer_than:90d (filename:pdf OR filename:jpg OR filename:jpeg OR filename:png OR filename:heic)` + (text ? " " + text : "");
+    const res = await gmFetch(`messages?maxResults=20&q=${encodeURIComponent(q)}`);
+    const ids = (res.messages || []).map(m => m.id);
+    if (!ids.length){ list.innerHTML = `<div class="empty"><p>לא נמצאו מיילים עם קבצים מצורפים${text ? " לחיפוש הזה" : ""}</p></div>`; return; }
+    const msgs = await Promise.all(ids.map(async id => {
+      if (gmCache.has(id)) return gmCache.get(id);
+      const m = await gmFetch(`messages/${id}?format=full`);
+      const v = { id, from: gmFromName(gmHeader(m, "from")), subject: gmHeader(m, "subject"), date: new Date(+m.internalDate), atts: gmAttachments(m.payload) };
+      gmCache.set(id, v); return v;
+    }));
+    const shown = msgs.filter(m => m.atts.length);
+    if (!shown.length){ list.innerHTML = `<div class="empty"><p>לא נמצאו קבצי PDF או תמונות</p></div>`; return; }
+    list.innerHTML = shown.map(m => `
+      <div class="gm-msg">
+        <div class="gm-top"><span class="gm-from">${escapeHtml(m.from)}</span><span class="tnum">${m.date.toLocaleDateString("he-IL")}</span></div>
+        <div class="gm-subj">${escapeHtml(m.subject || "(ללא נושא)")}</div>
+        <div class="gm-atts">${m.atts.map((a, i) => `<button class="mini-btn" type="button" data-gm-att="${m.id}:${i}">${a.type === "application/pdf" ? "📄" : "🖼️"} ${escapeHtml(a.name)}</button>`).join("")}</div>
+      </div>`).join("");
+  }catch(err){
+    console.error(err);
+    list.innerHTML = `<div class="empty"><p><b>לא הצלחתי לקרוא מ-Gmail</b></p><p>${escapeHtml(err.message || String(err))}</p></div>`;
+  }
+}
+async function gmPick(btn){
+  const [mid, idx] = btn.dataset.gmAtt.split(":");
+  const a = gmCache.get(mid)?.atts[+idx]; if (!a) return;
+  const old = btn.textContent; btn.disabled = true; btn.textContent = "⏳ מוריד…";
+  try{
+    const r = await gmFetch(`messages/${mid}/attachments/${a.id}`);
+    const b64 = r.data.replace(/-/g, "+").replace(/_/g, "/");
+    const bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const file = new File([bytes], a.name, { type: a.type });
+    closeSheet("overlayGmail");
+    if (!$("overlayInvoice").classList.contains("show")) openInvoiceForm(null);
+    pickFile(file, true);
+  }catch(err){
+    toast("ההורדה נכשלה: " + (err.message || err));
+  }finally{ btn.disabled = false; btn.textContent = old; }
+}
+$("btnGmail").onclick = () => {
+  openSheet("overlayGmail");
+  // ברירת מחדל: מחפשים לפי החברה שנבחרה בטופס
+  const c = companyById($("iCompany").value);
+  $("gmQuery").value = c?.name ? `"${c.name}"` : "";
+  gmSearch($("gmQuery").value.trim());
+};
+$("gmForm").onsubmit = e => { e.preventDefault(); gmSearch($("gmQuery").value.trim()); };
+$("gmList").addEventListener("click", e => { const b = e.target.closest("[data-gm-att]"); if (b) gmPick(b); });
+
 // גרירת קובץ (תמונה / PDF) מהמחשב: לתוך טופס החשבונית הפתוח, או לכל מקום באתר — פותח חשבונית חדשה
 (() => {
   let depth = 0;
