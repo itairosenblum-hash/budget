@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-app-compat.js"></script>
@@ -78,7 +78,8 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
     padding-top:var(--safe-t);padding-bottom:var(--safe-b);
     -webkit-tap-highlight-color: transparent;
   }
-  h1,h2,h3,.display{font-family:'Frank Ruhl Libre',serif;}
+  /* פונט אחד לכל האתר */
+  h1,h2,h3,.display{font-family:inherit;}
   .tnum{font-variant-numeric: tabular-nums;}
   button,input,select,textarea{font-family:inherit;}
 
@@ -213,8 +214,8 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
   .pass{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:var(--shadow);overflow:hidden;}
   .pass-top{padding:18px 20px 14px;}
   .pass-eyebrow{font-size:14px;color:var(--ink-soft);margin-bottom:2px;}
-  .pass-total{font-family:'Frank Ruhl Libre',serif;font-weight:900;font-size:36px;line-height:1.05;}
-  .pass-total small{font-family:'Heebo';font-weight:600;font-size:16px;color:var(--ink-soft);}
+  .pass-total{font-weight:900;font-size:36px;line-height:1.05;}
+  .pass-total small{font-weight:600;font-size:16px;color:var(--ink-soft);}
   .perf{position:relative;border-top:2px dashed var(--border);margin:0 18px;}
   .perf::before,.perf::after{content:"";position:absolute;top:-12px;width:22px;height:22px;border-radius:50%;background:var(--bg);border:1px solid var(--border);}
   .perf::before{right:-30px;} .perf::after{left:-30px;}
@@ -475,7 +476,7 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
   .lift-overlay{position:fixed;inset:0;z-index:80;background:rgba(21,25,18,.55);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s;}
   .lift-overlay.show{opacity:1;pointer-events:auto;}
   .lift-card{background:var(--bg);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow);width:100%;max-width:380px;padding:18px 18px 20px;text-align:center;}
-  .lift-title{font-family:'Frank Ruhl Libre',serif;font-weight:900;font-size:19px;color:var(--pri-dark);}
+  .lift-title{font-weight:900;font-size:19px;color:var(--pri-dark);}
   .lift-svg{width:100%;height:auto;display:block;margin:6px 0 2px;}
   .lift-pct{font-weight:900;font-size:40px;line-height:1;color:var(--ink);}
   .lift-pct small{font-size:20px;color:var(--ink-soft);margin-right:2px;}
