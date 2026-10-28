@@ -2366,7 +2366,7 @@ function openOrderForm(id, preset){
   $("oManual").style.display = inv ? "none" : "";
   $("oPriceHint").textContent = `למשל לשורות ישנות שהחשבונית שלהן לא באתר. מקלידים אחד — השני מחושב לפי מע"מ ${VAT_RATE * 100}%. מחיר כאן נחשב ניצול בפועל.`;
   $("oInvoiceRow").innerHTML = !o ? "" : inv
-    ? `<div class="item-note" style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><span>🧾 חשבונית ${escapeHtml(inv.number || "")} · ${fmtMoney(inv.total)} · ${inv.stamped ? `<b style="color:var(--good)">נבדקה והוזרמה ${escapeHtml(fmtDateIL(inv.stamped.date))}</b>` : "<b>ממתינה לחתימה</b>"}</span><button type="button" class="mini-btn pri" data-open-inv="${inv.id}">פתיחה</button></div>`
+    ? `<div class="item-note" style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><span>🧾 חשבונית ${escapeHtml(inv.number || "")} · ${fmtMoney(inv.total)} · ${inv.stamped ? `<b style="color:var(--good)">נבדקה והוזרמה ${escapeHtml(fmtDateIL(inv.stamped.date))}</b>` : "<b>ממתינה לחתימה</b>"}</span><span style="display:flex;gap:6px;flex:none;">${inv.stamped && !inv.stamped.manual ? `<button type="button" class="mini-btn" data-oview-inv="${inv.id}" data-st="1">👁️ החתומה</button>` : inv.hasFile ? `<button type="button" class="mini-btn" data-oview-inv="${inv.id}">👁️ צפייה</button>` : ""}<button type="button" class="mini-btn pri" data-open-inv="${inv.id}">פתיחה</button></span></div>`
     : `<button type="button" class="mini-btn pri" style="width:100%;justify-content:center;padding:10px;" data-inv-for-order="${o.id}">🧾 העלאת חשבונית להזמנה הזו</button>`;
   $("btnDeleteOrder").style.display = o ? "" : "none";
   document.querySelectorAll("#overlayOrder .field").forEach(f => f.classList.remove("invalid"));
@@ -3003,6 +3003,7 @@ async function pickFile(f, autoScan){
   if (autoScan) scanPendingFile();
 }
 // כל העלאת קובץ נקראת מיד אוטומטית (גם מ"צירוף קובץ" בתוך הטופס)
+$("oInvoiceRow").addEventListener("click", e => { const b = e.target.closest("[data-oview-inv]"); if (b) viewInvoice(b.dataset.oviewInv, !!b.dataset.st); });
 $("iFileInput").onchange = e => { pickFile(e.target.files[0], true); e.target.value = ""; };
 /* ---------- משיכת קובץ מצורף מ-Gmail (קריאה בלבד) ----------
    מבקשים מגוגל הרשאת gmail.readonly דרך אותה התחברות של Firebase, ומקבלים טוקן לשעה.
