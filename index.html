@@ -3143,12 +3143,30 @@ function matchCompany(name, taxId){
     return cn && (cn.includes(n) || n.includes(cn));
   }) || null;
 }
+// מציאת ה-1007 שהחשבונית שייכת אליה. מחזיר { o, sure } — sure = זוהה לפי מספר ההזמנה עצמה.
 function matchOrder(r, companyId){
-  const pool = state.orders.filter(o => (!companyId || o.companyId === companyId) && !invoiceForOrder(o.id));
+  let pool = state.orders.filter(o => (!companyId || o.companyId === companyId) && !invoiceForOrder(o.id));
   const num = digitsOnly(r.orderNumber);
-  if (num){ const o = pool.find(o => digitsOnly(o.number) === num) || state.orders.find(o => digitsOnly(o.number) === num); if (o) return o; }
-  if (r.tzadi){ const o = pool.filter(o => digitsOnly(o.tzadi) === r.tzadi).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0]; if (o) return o; }
-  if (companyId){ const open = pool; if (open.length === 1) return open[0]; }
+  if (num){
+    const o = pool.find(o => digitsOnly(o.number) === num) || state.orders.find(o => digitsOnly(o.number) === num);
+    if (o) return { o, sure: true };
+    // לפעמים בחשבונית מופיע מספר הזמנת המסגרת (הסעיף) ולא מספר ה-1007 — מצמצמים לשורות של הסעיף
+    const lineIds = new Set(state.budgetLines.filter(l => digitsOnly(l.orderNumber) === num).map(l => l.id));
+    if (lineIds.size){ const inLine = pool.filter(o => lineIds.has(o.budgetLineId)); if (inLine.length) pool = inLine; }
+  }
+  const newest = arr => [...arr].sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+  const tz = digitsOnly(r.tzadi);
+  if (tz){
+    const byTz = pool.filter(o => digitsOnly(o.tzadi) === tz);
+    if (byTz.length === 1) return { o: byTz[0] };
+    if (byTz.length > 1) pool = byTz;
+  }
+  // לפי סכום: השריון של ה-1007 שווה (כמעט) לסכום החשבונית, כולל או לפני מע"מ
+  const near = (a, b) => a > 0 && b > 0 && Math.abs(a - b) <= Math.max(1, b * 0.005);
+  const byAmt = pool.filter(o => { const v = Number(o.reserve) || 0; return near(v, Number(r.total)) || near(v, Number(r.amountBeforeVat)); });
+  if (byAmt.length === 1) return { o: byAmt[0] };
+  if (byAmt.length > 1) return { o: newest(byAmt) };
+  if (companyId && pool.length === 1) return { o: pool[0] };
   return null;
 }
 
@@ -3202,10 +3220,16 @@ function applyScan(r){
       $("newCompanyHint").innerHTML = ""; toast("החברה נוספה לכרטיסיות ✓ (את הטלפון והמייל משלימים שם)");
     };
   }
-  fillOrderSelect();
-  const o = matchOrder(r, $("iCompany").value);
-  if (o){ $("iOrder").value = o.id; if (!$("iCompany").value){ $("iCompany").value = o.companyId; fillOrderSelect(o.id); } }
-  setUncertain({ iNumber: low("invoiceNumber"), iDate: low("date"), iTotal: low("total") || !r.total, iCompany: !c || low("supplierName"), iOrder: !!r.orderNumber && !o });
+  // אם הטופס נפתח מתוך שורת 1007 — נשארים עליה, אלא אם החשבונית מציינת במפורש מספר הזמנה אחר
+  const preset = $("iOrder").value && orderById($("iOrder").value);
+  fillOrderSelect(preset && (!c || preset.companyId === c.id) ? preset.id : "");
+  const m = matchOrder(r, $("iCompany").value);
+  if (m && (!$("iOrder").value || m.sure)){ $("iOrder").value = m.o.id; if (!$("iCompany").value){ $("iCompany").value = m.o.companyId; fillOrderSelect(m.o.id); } }
+  if (!$("iOrder").value){
+    const open = state.orders.filter(o => o.companyId === $("iCompany").value && !invoiceForOrder(o.id));
+    if (open.length) toast(`לא זוהתה ה-1007 של החשבונית — צריך לבחור אותה (${open.length} פתוחות לחברה)`);
+  }
+  setUncertain({ iNumber: low("invoiceNumber"), iDate: low("date"), iTotal: low("total") || !r.total, iCompany: !c || low("supplierName"), iOrder: !$("iOrder").value || (m && !m.sure && !preset) });
 }
 
 $("btnSaveInvoice").onclick = async () => {
@@ -3214,7 +3238,9 @@ $("btnSaveInvoice").onclick = async () => {
   if (!(total > 0)){ $("iTotal").closest(".field").classList.add("invalid"); toast("צריך סכום לתשלום"); return; }
   const chosen = $("iOrder").value;
   if (!chosen && state.orders.some(o => (!$("iCompany").value || o.companyId === $("iCompany").value) && !invoiceForOrder(o.id))
-      && !confirm("החשבונית לא קושרה להזמנת 1007, ולכן לא תסגור את השריון של ההזמנה. לשמור בכל זאת?")) return;
+      && !confirm("⚠️ החשבונית לא קושרה לשום 1007 — ולכן שורת ה-1007 תישאר פתוחה.\n\nביטול — לחזור ולבחור את ה-1007 בשדה \"הזמנת עבודה\".\nאישור — לשמור בלי קישור.")){
+    const f = $("iOrder").closest(".field"); f.classList.add("invalid"); f.scrollIntoView({ block: "center", behavior: "smooth" }); $("iOrder").focus(); return;
+  }
   const taken = chosen && invoiceForOrder(chosen);
   if (taken && taken.id !== editingInvoiceId && !confirm(`להזמנה הזו כבר מקושרת חשבונית ${taken.number || ""}. לקשר גם את זו במקומה?`)) return;
   if (taken && taken.id !== editingInvoiceId) upsert("invoices", Object.assign({}, taken, { orderId: "" }));
