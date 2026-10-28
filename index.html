@@ -1289,6 +1289,7 @@ function deleteInvoice(id){
   const inv = state.invoices.find(x => x.id === id); if (!inv) return;
   const o = orderById(inv.orderId);
   if (!confirm(`למחוק את חשבונית ${inv.number || ""}${inv.hasFile ? " (כולל הקובץ והגרסה החתומה)" : ""}?${o ? `\nהזמנה ${o.number || ""} תחזור להיות משוריינת.` : ""}`)) return;
+  if (o && o.endDateFromInv === id) upsert("orders", Object.assign({}, o, { endDate: "", endDateFromInv: "" }));
   removeItems([["invoices", id]], "החשבונית נמחקה");
 }
 
@@ -3310,6 +3311,14 @@ $("btnSaveInvoice").onclick = async () => {
   }catch(e){ console.error(e); toast("שמירת הקובץ נכשלה: " + (e.message || "")); }
   const isNew = !editingInvoiceId;
   const newFile = !!pendingFile;
+  // תאריך סיום לסודר = תאריך החשבונית (רק אם לא הוזן ידנית). אם החשבונית עברה לסודר אחר — מנקים מהקודם.
+  if (old.orderId && old.orderId !== inv.orderId){
+    const po = orderById(old.orderId);
+    if (po && po.endDateFromInv === id) upsert("orders", Object.assign({}, po, { endDate: "", endDateFromInv: "" }));
+  }
+  const lo = !isDeliveryNote(inv) && orderById(inv.orderId);
+  if (lo && inv.date && (!lo.endDate || lo.endDateFromInv === id) && lo.endDate !== inv.date)
+    upsert("orders", Object.assign({}, lo, { endDate: inv.date, endDateFromInv: id }));
   upsert("invoices", inv); closeSheet("overlayInvoice");
   if (newFile) saveInvoiceFileFlow(id);
   else { toast(isNew ? "החשבונית נשמרה ✓" : "החשבונית עודכנה ✓"); flushFiles(); }
