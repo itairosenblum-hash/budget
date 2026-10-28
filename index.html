@@ -580,8 +580,9 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
     #view > .r-list .r-main{padding:14px 16px;}
 
     /* 1007: קבוצות החברות זו לצד זו */
-    #view:has(> .r-grp){display:grid;grid-template-columns:repeat(auto-fill,minmax(460px,1fr));gap:6px 22px;align-items:start;}
-    #view:has(> .r-grp) > :not(.r-grp){grid-column:1 / -1;}
+    /* עמודות זורמות (כמו עיתון) — כל קבוצה נצמדת לזו שמעליה, בלי רווחים בין שורות */
+    .r-grps{column-width:460px;column-gap:22px;}
+    .r-grps > .r-grp{break-inside:avoid;display:inline-block;width:100%;}
 
     /* טבלת הסעיף — ברוחב מלא, בלי גלילה צידית כשיש מקום */
     table.ledger{font-size:14px;}
@@ -2261,12 +2262,12 @@ function renderOrders(){
   const groups = new Map();
   for (const o of shown){ const k = companyById(o.companyId)?.name || "ללא חברה"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(o); }
   const dir = tab === "open" ? 1 : -1;
-  return html + [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, "he")).map(([name, os]) => {
+  return html + `<div class="r-grps">` + [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, "he")).map(([name, os]) => {
     os.sort((a, b) => dir * String(a.date || "").localeCompare(String(b.date || "")));
     const sum = os.reduce((t, o) => t + (orderPrices(o)?.total || orderReserved(o) || 0), 0);
     return `<div class="r-grp"><div class="r-grp-head"><span>${escapeHtml(name)}</span><span class="tnum">${os.length}${sum ? ` · ${fmtMoney(sum)}` : ""}</span></div>
       <div class="r-list">${os.map(orderRowHtml).join("")}</div></div>`;
-  }).join("");
+  }).join("") + `</div>`;
 }
 
 let editingOrderId = null;
