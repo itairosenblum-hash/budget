@@ -946,6 +946,18 @@ const OPEN_COS_KEY = "tzahram_open_cos";
 const openOrderRows = new Set(), openLns = new Set();
 const openCos = new Set((() => { try{ return JSON.parse(localStorage.getItem(OPEN_COS_KEY)) || []; }catch(e){ return []; } })());
 function saveOpenCos(){ try{ localStorage.setItem(OPEN_COS_KEY, JSON.stringify([...openCos])); }catch(e){} }
+// האם יש סינון פעיל בעמוד התקציב (מעבר לברירת המחדל: סעיפים פעילים, כל השנים, בלי חיפוש)
+function budgetFiltered(){
+  return !!search || filt.budgetStatus !== "active" || filt.budgetYear !== "all" || filt.needsCare === "1" || filt.expiring === "1";
+}
+// ניקוי כל הסינונים בעמוד הנוכחי (המיון נשאר)
+function clearFilters(){
+  search = ""; $("searchInput").value = "";
+  if (activeTab === "budget") Object.assign(filt, { budgetStatus: "active", budgetYear: "all", needsCare: "0", expiring: "0" });
+  if (activeTab === "orders") Object.assign(filt, { ordersTab: "open", ordersYear: "all" });
+  if (activeTab === "invoices") filt.invoicesYear = "all";
+  saveFilters(); render();
+}
 function saveFilters(){ try{ localStorage.setItem(FILTERS_KEY, JSON.stringify(filt)); }catch(e){} }
 const HE_MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"];
 function yearOf(iso){ return /^\d{4}-/.test(String(iso || "")) ? String(iso).slice(0, 4) : "none"; }
@@ -1366,7 +1378,7 @@ function renderBudget(){
     const sk = filt.budgetSort || "name";
     html += `
       <div class="filter-panel">
-      <div class="fp-label">סינון ותצוגה</div>
+      <div class="fp-label" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>סינון ותצוגה</span>${budgetFiltered() ? `<button class="mini-btn" data-clear-filters>✕ ניקוי סינון</button>` : ""}</div>
       <div class="seg" role="tablist" style="margin-top:0;">
         ${[["active", "פעילים", nActive], ["closed", "סגורים", nClosed], ["all", "הכל", inYear.length]].map(([k, t, n]) =>
           `<button class="${filt.budgetStatus === k ? "active" : ""}" data-filter="budgetStatus" data-val="${k}">${t}<span class="n">${n}</span></button>`).join("")}
@@ -2251,7 +2263,7 @@ function renderOrders(){
     <div class="seg" role="tablist" style="margin-top:6px;">
       <button class="${tab === "open" ? "active" : ""}" data-filter="ordersTab" data-val="open">פתוחות<span class="n">${nOpen}</span></button>
       <button class="${tab === "done" ? "active" : ""}" data-filter="ordersTab" data-val="done">טופלו<span class="n">${nDone}</span></button>
-    </div>`;
+    </div>${search || tab === "done" ? `<div style="margin-top:8px;"><button class="mini-btn" data-clear-filters>✕ ניקוי סינון</button></div>` : ""}`;
   if (!all.length){
     return html + `<div class="empty"><div class="big">📄</div><p><b>עוד אין הזמנות עבודה</b></p>
       <p>לוחצים על + כדי למלא הזמנה ולהפיק טופס 1007</p></div>`;
@@ -3693,6 +3705,7 @@ $("tabs").addEventListener("click", e => {
 $("view").addEventListener("click", e => {
   const f = e.target.closest("[data-filter]");
   if (f){ filt[f.dataset.filter] = f.dataset.val; saveFilters(); render(); return; }
+  if (e.target.closest("[data-clear-filters]")) return clearFilters();
   const rp = e.target.closest("#btnReportPdf"); if (rp) return budgetReportPdf(rp);
   if (e.target.closest("#btnReportXlsx")) return budgetReportXlsx();
   const tln = e.target.closest("[data-toggle-ln]"); if (tln){ const k = tln.dataset.toggleLn; openLns.has(k) ? openLns.delete(k) : openLns.add(k); render(); return; }
