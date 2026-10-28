@@ -359,6 +359,10 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
   .gm-top{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--ink-soft);}
   .gm-from{font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .gm-subj{font-size:14px;margin:2px 0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .gm-msg.rec{border-color:#C9A227;box-shadow:0 0 0 2px rgba(201,162,39,.25);}
+  .gm-tag{font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;}
+  .gm-tag.rec{background:#FFF4CC;color:#7A5A00;}
+  .gm-tag.used{background:#E6F4EA;color:#1E6B35;}
   .gm-atts{display:flex;flex-wrap:wrap;gap:6px;}
   .gm-atts .mini-btn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   #dropHint{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(15,30,60,.45);pointer-events:none;}
@@ -3067,28 +3071,57 @@ function gmAttachments(payload){
 const gmCache = new Map();   // messageId -> { from, subject, date, atts }
 function gmHeader(m, name){ return (m.payload?.headers || []).find(h => h.name.toLowerCase() === name)?.value || ""; }
 function gmFromName(v){ const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>/.exec(v); return m ? (m[1] || m[2]) : v; }
-async function gmSearch(text){
+const GM_FILES = `has:attachment (filename:pdf OR filename:jpg OR filename:jpeg OR filename:png OR filename:heic)`;
+async function gmList(q, max){
+  const res = await gmFetch(`messages?maxResults=${max}&q=${encodeURIComponent(q)}`);
+  return Promise.all((res.messages || []).map(async ({ id }) => {
+    if (gmCache.has(id)) return gmCache.get(id);
+    const m = await gmFetch(`messages/${id}?format=full`);
+    const v = { id, from: gmFromName(gmHeader(m, "from")), email: (/<([^>]+)>/.exec(gmHeader(m, "from")) || [])[1] || gmHeader(m, "from"),
+      subject: gmHeader(m, "subject"), snippet: m.snippet || "", date: new Date(+m.internalDate), atts: gmAttachments(m.payload) };
+    gmCache.set(id, v); return v;
+  }));
+}
+function gmDay(iso, addDays){ const d = new Date(Date.parse(iso) + (addDays || 0) * 864e5); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; }
+// חיפוש: טקסט חופשי, או — כשהחשבונית שייכת ל-1007 — חיפוש ממוקד לפי צ', חברה ותאריך, עם המלצה
+async function gmSearch(text, order){
   const list = $("gmList");
-  list.innerHTML = `<div class="empty"><p>טוען מיילים…</p></div>`;
+  list.innerHTML = `<div class="empty"><p>${order ? "מחפש את החשבונית של ה-1007…" : "טוען מיילים…"}</p></div>`;
   try{
-    const q = `has:attachment newer_than:90d (filename:pdf OR filename:jpg OR filename:jpeg OR filename:png OR filename:heic)` + (text ? " " + text : "");
-    const res = await gmFetch(`messages?maxResults=20&q=${encodeURIComponent(q)}`);
-    const ids = (res.messages || []).map(m => m.id);
-    if (!ids.length){ list.innerHTML = `<div class="empty"><p>לא נמצאו מיילים עם קבצים מצורפים${text ? " לחיפוש הזה" : ""}</p></div>`; return; }
-    const msgs = await Promise.all(ids.map(async id => {
-      if (gmCache.has(id)) return gmCache.get(id);
-      const m = await gmFetch(`messages/${id}?format=full`);
-      const v = { id, from: gmFromName(gmHeader(m, "from")), subject: gmHeader(m, "subject"), date: new Date(+m.internalDate), atts: gmAttachments(m.payload) };
-      gmCache.set(id, v); return v;
-    }));
+    let msgs = [], why = new Map();
+    if (order){
+      const c = companyById(order.companyId), tz = digitsOnly(order.tzadi);
+      const since = /^\d{4}-\d{2}-\d{2}/.test(String(order.date || "")) ? ` after:${gmDay(order.date, -3)}` : " newer_than:180d";
+      const who = c ? `(${[c.email && `from:${c.email}`, c.name && `"${c.name}"`].filter(Boolean).join(" OR ")})` : "";
+      const [byTz, byCo] = await Promise.all([
+        tz ? gmList(`${GM_FILES}${since} "${tz}"`, 10) : [],
+        who ? gmList(`${GM_FILES}${since} ${who}`, 20) : gmList(`${GM_FILES}${since}`, 20),
+      ]);
+      const coIds = new Set(byCo.map(m => m.id));
+      // ⭐ מומלץ: מופיע בו הצ' וגם מהחברה; אחריו — הצ' בלבד; אחריו — מהחברה (הקרוב לתאריך ה-1007 קודם)
+      for (const m of byTz) why.set(m.id, coIds.has(m.id) ? 2 : 1);
+      const seen = new Set(), all = [...byTz, ...byCo].filter(m => !seen.has(m.id) && seen.add(m.id));
+      const t0 = Date.parse(order.date) || 0;
+      msgs = all.sort((x, y) => (why.get(y.id) || 0) - (why.get(x.id) || 0) || Math.abs(x.date - t0) - Math.abs(y.date - t0));
+    } else {
+      msgs = await gmList(`${GM_FILES} newer_than:90d` + (text ? " " + text : ""), 20);
+    }
+    // חשבוניות שכבר באתר (לפי מספר חשבונית בנושא / בשם הקובץ / בתקציר) — מסמנים כדי לא להעלות פעמיים
+    const nums = state.invoices.map(i => digitsOnly(i.number)).filter(n => n.length >= 4);
+    const usedIn = m => { const hay = [m.subject, m.snippet, ...m.atts.map(a => a.name)].join(" "); return nums.find(n => new RegExp(`(^|\\D)${n}(\\D|$)`).test(hay)); };
     const shown = msgs.filter(m => m.atts.length);
-    if (!shown.length){ list.innerHTML = `<div class="empty"><p>לא נמצאו קבצי PDF או תמונות</p></div>`; return; }
-    list.innerHTML = shown.map(m => `
-      <div class="gm-msg">
+    if (!shown.length){ list.innerHTML = `<div class="empty"><p>לא נמצאו מיילים עם PDF או תמונה${order ? " שמתאימים ל-1007 הזו — אפשר לחפש ידנית למעלה" : text ? " לחיפוש הזה" : ""}</p></div>`; return; }
+    list.innerHTML = shown.map(m => {
+      const w = why.get(m.id), used = usedIn(m);
+      const tag = w === 2 ? `<span class="gm-tag rec">⭐ מומלץ — הצ' והחברה תואמים</span>` : w === 1 ? `<span class="gm-tag rec">⭐ מופיע הצ'</span>` : "";
+      return `
+      <div class="gm-msg ${w === 2 ? "rec" : ""}">
+        ${tag || used ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">${tag}${used ? `<span class="gm-tag used">✓ חשבונית ${escapeHtml(used)} כבר באתר</span>` : ""}</div>` : ""}
         <div class="gm-top"><span class="gm-from">${escapeHtml(m.from)}</span><span class="tnum">${m.date.toLocaleDateString("he-IL")}</span></div>
         <div class="gm-subj">${escapeHtml(m.subject || "(ללא נושא)")}</div>
-        <div class="gm-atts">${m.atts.map((a, i) => `<button class="mini-btn" type="button" data-gm-att="${m.id}:${i}">${a.type === "application/pdf" ? "📄" : "🖼️"} ${escapeHtml(a.name)}</button>`).join("")}</div>
-      </div>`).join("");
+        <div class="gm-atts">${m.atts.map((a, i) => `<button class="mini-btn ${w === 2 ? "pri" : ""}" type="button" data-gm-att="${m.id}:${i}">${a.type === "application/pdf" ? "📄" : "🖼️"} ${escapeHtml(a.name)}</button>`).join("")}</div>
+      </div>`;
+    }).join("");
   }catch(err){
     console.error(err);
     list.innerHTML = `<div class="empty"><p><b>לא הצלחתי לקרוא מ-Gmail</b></p><p>${escapeHtml(err.message || String(err))}</p></div>`;
@@ -3113,10 +3146,12 @@ async function gmPick(btn){
 }
 $("btnGmail").onclick = () => {
   openSheet("overlayGmail");
-  // ברירת מחדל: מחפשים לפי החברה שנבחרה בטופס
+  // יש 1007 בטופס — חיפוש ממוקד לפי צ', חברה ותאריך; אחרת לפי החברה שנבחרה
+  const o = orderById($("iOrder").value);
   const c = companyById($("iCompany").value);
-  $("gmQuery").value = c?.name ? `"${c.name}"` : "";
-  gmSearch($("gmQuery").value.trim());
+  $("gmQuery").value = o ? "" : c?.name ? `"${c.name}"` : "";
+  $("gmQuery").placeholder = o ? `🔍 מחפש לפי 1007${o.serial ? ` סודר ${o.serial}` : ""}${o.tzadi ? ` · צ' ${o.tzadi}` : ""} — או חיפוש חופשי` : "🔍 חיפוש: שם חברה, מספר חשבונית, שולח...";
+  gmSearch($("gmQuery").value.trim(), o || null);
 };
 $("gmForm").onsubmit = e => { e.preventDefault(); gmSearch($("gmQuery").value.trim()); };
 $("gmList").addEventListener("click", e => { const b = e.target.closest("[data-gm-att]"); if (b) gmPick(b); });
