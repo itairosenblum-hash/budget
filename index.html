@@ -770,6 +770,7 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
     <div class="file-row">
       <label class="mini-btn" style="cursor:pointer;">📎 צירוף קובץ<input type="file" id="iFileInput" accept="image/*,application/pdf" hidden></label>
       <span class="fname" id="iFileName">לא צורף קובץ — אפשר גם לגרור לכאן</span>
+      <button class="mini-btn" id="btnViewInvFile" type="button">👁️ צפייה</button>
       <button class="mini-btn" id="btnGmail" type="button">📧 מ-Gmail</button>
       <button class="mini-btn" id="btnScanFile" type="button">🔄 קריאה מחדש</button>
       <button class="mini-btn danger" id="btnRemoveFile" type="button" aria-label="הסרת הקובץ">✕</button>
@@ -2269,6 +2270,7 @@ function orderRowHtml(o){
         ].filter(Boolean).map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
         <div class="item-actions">
           ${inv ? `<button class="mini-btn pri" data-edit-invoice="${inv.id}">🧾 החשבונית</button>` : `<button class="mini-btn pri" data-inv-for-order="${o.id}">🧾 העלאת חשבונית</button>`}
+          ${inv?.stamped && !inv.stamped.manual ? `<button class="mini-btn" data-view-stamped="${inv.id}">👁️ החתומה</button>` : inv?.hasFile ? `<button class="mini-btn" data-view-invoice="${inv.id}">👁️ צפייה</button>` : ""}
           <button class="mini-btn" data-issue-order="${o.id}">📄 1007 PDF</button>
           <button class="mini-btn wa" data-send-order="${o.id}">📤 שליחה</button>
           <button class="mini-btn" data-edit-order="${o.id}">✏️ עריכה</button>
@@ -2917,7 +2919,11 @@ function renderFileRow(name){
   $("iFileName").textContent = name || "לא צורף קובץ — אפשר גם לגרור לכאן";
   $("btnScanFile").style.display = (pendingFile) ? "" : "none";
   $("btnRemoveFile").style.display = name ? "" : "none";
+  // צפייה בקובץ שכבר שמור (החתום אם יש, אחרת המקור)
+  const saved = !pendingFile && !pendingFileRemoved && state.invoices.find(x => x.id === editingInvoiceId);
+  $("btnViewInvFile").style.display = saved && (saved.hasFile || (saved.stamped && !saved.stamped.manual)) ? "" : "none";
 }
+$("btnViewInvFile").onclick = () => { const i = state.invoices.find(x => x.id === editingInvoiceId); if (i) viewInvoice(i.id, !!(i.stamped && !i.stamped.manual)); };
 function setUncertain(map){
   document.querySelectorAll("#overlayInvoice .field").forEach(f => f.classList.remove("uncertain", "invalid"));
   for (const [id, on] of Object.entries(map || {})) if (on) $(id)?.closest(".field")?.classList.add("uncertain");
