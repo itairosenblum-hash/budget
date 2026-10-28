@@ -3163,32 +3163,45 @@ function matchCompany(name, taxId){
   }) || null;
 }
 // מציאת ה-1007 שהחשבונית שייכת אליה. מחזיר { o, sure } — sure = זוהה לפי מספר ההזמנה עצמה.
+// מציאת ה-1007 שהחשבונית שייכת אליה — לפי השילוב של סעיף (מספר ההזמנה), צ' ותאריך, ובנוסף סכום ושע"מ.
+// כל מועמדת מקבלת ניקוד; מחזיר { o, sure } — sure = הצ' והסעיף תואמים וההתאמה חד-משמעית.
 function matchOrder(r, companyId){
-  let pool = state.orders.filter(o => (!companyId || o.companyId === companyId) && !invoiceForOrder(o.id));
-  const num = digitsOnly(r.orderNumber);
-  if (num){
-    // מספר ההזמנה לבדו לא תמיד מזהה שורה אחת — לרוב כל השורות בסעיף נושאות את אותו מספר
-    const byNum = pool.filter(o => digitsOnly(o.number) === num);
-    if (byNum.length === 1) return { o: byNum[0], sure: true };
-    if (byNum.length > 1) pool = byNum;
-    // לפעמים בחשבונית מופיע מספר הזמנת המסגרת (הסעיף) ולא מספר ה-1007 — מצמצמים לשורות של הסעיף
-    const lineIds = new Set(state.budgetLines.filter(l => digitsOnly(l.orderNumber) === num).map(l => l.id));
-    if (lineIds.size){ const inLine = pool.filter(o => lineIds.has(o.budgetLineId)); if (inLine.length) pool = inLine; }
-  }
-  const newest = arr => [...arr].sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
-  const tz = digitsOnly(r.tzadi);
-  if (tz){
-    const byTz = pool.filter(o => digitsOnly(o.tzadi) === tz);
-    if (byTz.length === 1) return { o: byTz[0] };
-    if (byTz.length > 1) pool = byTz;
-  }
-  // לפי סכום: השריון של ה-1007 שווה (כמעט) לסכום החשבונית, כולל או לפני מע"מ
+  const pool = state.orders.filter(o => (!companyId || o.companyId === companyId) && !invoiceForOrder(o.id));
+  if (!pool.length) return null;
+  const num = digitsOnly(r.orderNumber), tz = digitsOnly(r.tzadi);
+  const invDay = /^\d{4}-\d{2}-\d{2}/.test(String(r.date || "")) ? Date.parse(String(r.date).slice(0, 10)) : NaN;
   const near = (a, b) => a > 0 && b > 0 && Math.abs(a - b) <= Math.max(1, b * 0.005);
-  const byAmt = pool.filter(o => { const v = Number(o.reserve) || 0; return near(v, Number(r.total)) || near(v, Number(r.amountBeforeVat)); });
-  if (byAmt.length === 1) return { o: byAmt[0] };
-  if (byAmt.length > 1) return { o: newest(byAmt) };
-  if (companyId && pool.length === 1) return { o: pool[0] };
-  return null;
+  const scored = pool.map(o => {
+    let sc = 0, tzOk = false, numOk = false;
+    // סעיף / מספר הזמנה
+    if (num){
+      const lineNum = digitsOnly(budgetById(o.budgetLineId)?.orderNumber);
+      if (digitsOnly(o.number) === num || lineNum === num){ sc += 30; numOk = true; }
+      else if (o.number || lineNum) sc -= 25;
+    }
+    // צ' — הכי חזק: צ' שונה כמעט פוסל
+    if (tz){
+      if (digitsOnly(o.tzadi) === tz){ sc += 50; tzOk = true; }
+      else if (o.tzadi) sc -= 45;
+    }
+    // תאריך: החשבונית מגיעה אחרי ה-1007; ככל שקרובה יותר — יותר סביר
+    if (!isNaN(invDay) && /^\d{4}-\d{2}-\d{2}/.test(String(o.date || ""))){
+      const days = (invDay - Date.parse(String(o.date).slice(0, 10))) / 864e5;
+      if (days < -3) sc -= 20;                       // חשבונית לפני פתיחת ה-1007 — לא סביר
+      else sc += Math.max(0, 25 - Math.max(0, days) / 6);   // עד ~5 חודשים מקבל ניקוד, הקרובה ביותר הכי הרבה
+    }
+    // סכום השריון
+    const v = Number(o.reserve) || 0;
+    if (near(v, Number(r.total)) || near(v, Number(r.amountBeforeVat))) sc += 15;
+    // שעות מנוע
+    if (r.engineHours && o.hours && Math.abs(Number(r.engineHours) - Number(o.hours)) <= 5) sc += 10;
+    return { o, sc, tzOk, numOk };
+  }).sort((a, b) => b.sc - a.sc);
+  const [best, second] = scored;
+  if (best.sc < 20) return null;
+  const margin = second ? best.sc - second.sc : 99;
+  const sure = best.tzOk && (!num || best.numOk) && margin >= 10;
+  return { o: best.o, sure };
 }
 
 let scanning = false;
