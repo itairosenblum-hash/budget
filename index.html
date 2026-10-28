@@ -2899,7 +2899,8 @@ function fillOrderSelect(keep){
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   $("iOrder").innerHTML = `<option value="">— ללא הזמנה —</option>` + orders.map(o => {
     const taken = invoiceForOrder(o.id); const mine = taken && taken.id === editingInvoiceId;
-    return `<option value="${o.id}">הזמנה ${escapeHtml(o.number || "—")}${o.tzadi ? ` · צ' ${escapeHtml(o.tzadi)}` : ""} · ${escapeHtml(fmtDateIL(o.date))}${taken && !mine ? " (יש חשבונית)" : ""}</option>`;
+    const what = String(o.repairs || "").split("\n")[0].slice(0, 40);
+    return `<option value="${o.id}">${o.serial ? `סודר ${escapeHtml(o.serial)} · ` : ""}${o.tzadi ? `צ' ${escapeHtml(o.tzadi)} · ` : ""}${escapeHtml(fmtDateIL(o.date))}${what ? ` · ${escapeHtml(what)}` : ""}${taken && !mine ? " (יש חשבונית)" : ""}</option>`;
   }).join("");
   if (keep && [...$("iOrder").options].some(op => op.value === keep)) $("iOrder").value = keep;
 }
@@ -3160,8 +3161,10 @@ function matchOrder(r, companyId){
   let pool = state.orders.filter(o => (!companyId || o.companyId === companyId) && !invoiceForOrder(o.id));
   const num = digitsOnly(r.orderNumber);
   if (num){
-    const o = pool.find(o => digitsOnly(o.number) === num) || state.orders.find(o => digitsOnly(o.number) === num);
-    if (o) return { o, sure: true };
+    // מספר ההזמנה לבדו לא תמיד מזהה שורה אחת — לרוב כל השורות בסעיף נושאות את אותו מספר
+    const byNum = pool.filter(o => digitsOnly(o.number) === num);
+    if (byNum.length === 1) return { o: byNum[0], sure: true };
+    if (byNum.length > 1) pool = byNum;
     // לפעמים בחשבונית מופיע מספר הזמנת המסגרת (הסעיף) ולא מספר ה-1007 — מצמצמים לשורות של הסעיף
     const lineIds = new Set(state.budgetLines.filter(l => digitsOnly(l.orderNumber) === num).map(l => l.id));
     if (lineIds.size){ const inLine = pool.filter(o => lineIds.has(o.budgetLineId)); if (inLine.length) pool = inLine; }
@@ -3232,11 +3235,13 @@ function applyScan(r){
       $("newCompanyHint").innerHTML = ""; toast("החברה נוספה לכרטיסיות ✓ (את הטלפון והמייל משלימים שם)");
     };
   }
-  // אם הטופס נפתח מתוך שורת 1007 — נשארים עליה, אלא אם החשבונית מציינת במפורש מספר הזמנה אחר
+  // אם הטופס נפתח מתוך שורת 1007 — נשארים עליה תמיד (המשתמש כבר בחר אותה)
   const preset = $("iOrder").value && orderById($("iOrder").value);
-  fillOrderSelect(preset && (!c || preset.companyId === c.id) ? preset.id : "");
-  const m = matchOrder(r, $("iCompany").value);
-  if (m && (!$("iOrder").value || m.sure)){ $("iOrder").value = m.o.id; if (!$("iCompany").value){ $("iCompany").value = m.o.companyId; fillOrderSelect(m.o.id); } }
+  if (preset && c && preset.companyId !== c.id) toast("שים לב: החברה בחשבונית שונה מהחברה של ה-1007");
+  if (preset) $("iCompany").value = preset.companyId;
+  fillOrderSelect(preset ? preset.id : "");
+  const m = preset ? null : matchOrder(r, $("iCompany").value);
+  if (m){ $("iOrder").value = m.o.id; if (!$("iCompany").value){ $("iCompany").value = m.o.companyId; fillOrderSelect(m.o.id); } }
   syncInvoiceBudget();
   if (!$("iOrder").value){
     const open = state.orders.filter(o => o.companyId === $("iCompany").value && !invoiceForOrder(o.id));
