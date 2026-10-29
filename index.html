@@ -169,6 +169,15 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
   .brand > div{min-width:0;}
   .icon-btn{width:36px;height:36px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink);flex:none;}
   .icon-btn:active{transform:scale(.94);}
+  .hdr-btns{display:flex;gap:8px;align-items:center;flex:none;}
+  .help-btn{font-weight:800;font-size:18px;text-decoration:none;line-height:1;}
+  .guide-link{display:flex;align-items:center;gap:12px;padding:12px 14px;margin:0 0 14px;border:1px solid var(--border);border-radius:12px;
+    background:var(--card);color:var(--ink);text-decoration:none;}
+  .guide-link:active{transform:scale(.98);}
+  .guide-link .gl-ic{font-size:22px;flex:none;}
+  .guide-link b{display:block;font-size:15px;}
+  .guide-link small{display:block;font-size:12.5px;opacity:.7;line-height:1.35;}
+  .guide-link .gl-arrow{margin-inline-start:auto;opacity:.5;font-weight:700;}
 
   #syncStatusLine{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:var(--pri-dark);margin-top:10px;cursor:pointer;background:var(--pri-tint);border:none;border-radius:var(--radius-pill);padding:6px 12px;}
   #syncStatusLine:active{transform:scale(.97);}
@@ -631,9 +640,12 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
           <div class="sub">צהר"מ · ניהול סעיפים, חשבוניות וספקים</div>
         </div>
       </div>
+      <div class="hdr-btns">
+      <a class="icon-btn help-btn" id="btnGuide" href="https://claude.ai/artifact/AzTCF7aUPmaRyX7zDVxvCx" target="_blank" rel="noopener" aria-label="מדריך לאתר" title="מדריך לאתר — הסבר צעד אחר צעד">?</a>
       <button class="icon-btn" id="btnSettings" aria-label="תפריט" title="תפריט — סיכום, דוחות והגדרות">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
+      </div>
     </div>
     <button id="syncStatusLine" type="button"></button>
     <button class="side-add" id="btnAddSide" type="button"><span style="font-size:20px;line-height:1;">+</span><span id="btnAddSideLbl">הוספה</span></button>
@@ -857,6 +869,11 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
   <div class="sheet">
     <div class="sheet-handle"></div>
     <h2>תפריט</h2>
+    <a class="guide-link" href="https://claude.ai/artifact/AzTCF7aUPmaRyX7zDVxvCx" target="_blank" rel="noopener">
+      <span class="gl-ic">🎓</span>
+      <span><b>מדריך לאתר</b><small>סיור, חיפוש סעיף, והעלאת חשבונית עד שליחה — צעד אחר צעד</small></span>
+      <span class="gl-arrow">←</span>
+    </a>
     <div id="menuSummary"></div>
     <div class="divider"></div>
     <details class="settings-fold" id="settingsFold">
