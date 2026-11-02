@@ -2349,12 +2349,8 @@ function fillDatalists(){
   $("dlVehicle").innerHTML = uniq("vehicle").map(v => `<option value="${escapeHtml(v)}">`).join("");
   $("dlUnit").innerHTML = uniq("unit").map(v => `<option value="${escapeHtml(v)}">`).join("");
 }
-// איש הקשר של ההזמנה האחרונה שהוזן בה — ברירת מחדל להזמנה חדשה
-function lastContact(){
-  const prev = state.orders.filter(o => String(o.contact || "").trim())
-    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0];
-  return prev ? prev.contact : "";
-}
+// אנשי קשר ברירת מחדל — מתמלאים בכל הזמנה חדשה, ובהפקה של הזמנה שאין בה איש קשר
+const DEFAULT_CONTACT = "גבריאל פיליבה 052-920-7209\nבמידה ואין זמינות - אורן סמה 052-222-4700";
 function openOrderForm(id, preset){
   const o = state.orders.find(x => x.id === id);
   editingOrderId = o ? o.id : null;
@@ -2383,7 +2379,7 @@ function openOrderForm(id, preset){
   $("oUnit").value = o?.unit || "";
   $("oRepairs").value = o?.repairs || "";
   $("oDetails").value = o?.details || "";
-  $("oContact").value = o ? (o.contact || "") : lastContact();
+  $("oContact").value = o ? (o.contact || DEFAULT_CONTACT) : DEFAULT_CONTACT;
   $("oFlag").value = o?.flag || "";
   const inv = o && invoiceForOrder(o.id);
   setNum("oReserve", o?.reserve ?? null);
@@ -2506,7 +2502,7 @@ function fieldsFor(o){
     "[יחידה]": o.unit,
     "[שדה תיקונים]": o.repairs,
     "[פירוט התיקון]": o.details,
-    "[פרטי איש קשר]": o.contact || "",
+    "[פרטי איש קשר]": o.contact || DEFAULT_CONTACT,
   };
 }
 let templateCache = null;
