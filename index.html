@@ -2611,12 +2611,13 @@ const BG_1007_URL = "1007-bg.jpg";
 const PDF_MIME = "application/pdf";
 // מיקומים בנקודות (pt), נמדדו מהטופס המקורי. baseline = קו הבסיס של השורה.
 const F1007 = {
-  page: [612, 792], right: 539.93, left: 72, center: 306,
+  page: [612, 792], right: 539.93, left: 72,
   lineA: { baseline: 229.41, alColon: 455.368, dateColon: 185.892, size: 12 },
-  lineB: { baseline: 339.9 },
-  lineC: { baseline: 368.45 },
+  // שורות 2–3 מיושרות לימין בקו 518.6 (כמו ב-Word)
+  lineB: { baseline: 288.6 },
+  lineC: { baseline: 317.15 }, rightBC: 518.6,
   // תיקונים → "התיקון יבוצע:" → פירוט → "איש קשר:" → פרטים. bottom = קו בסיס אחרון מעל החתימה
-  block: { first: 451.2, headGap: 57.1, valueGap: 28.55, bottom: 634 },
+  block: { first: 391.9, headGap: 41.1, valueGap: 20.55, bottom: 541, hardBottom: 720, sideW: 300 },
   size: 14, lineH: 20.55,
 };
 const scriptCache = {};
@@ -2700,11 +2701,11 @@ async function render1007Overlay(o){
   ctx.fillText("תאריך", A.dateColon + dateLabelW, A.baseline);
   drawRuns(ctx, [{ t: ": " + f["[תאריך הנפקת מסמך]"] }], A.dateColon, A.baseline, S); }
 
-  // שורות 2–3 ממורכזות בעמוד, כמו ב-Word, עם אותם רווחים בין השדות
+  // שורות 2–3 מיושרות לימין כמו ב-Word, עם אותם רווחים בין השדות
   const fullW = F1007.right - F1007.left;
   const centered = (runs, baseline) => {
-    const size = fitSize(ctx, runs, fullW, S);
-    drawRuns(ctx, runs, F1007.center + runsWidth(ctx, runs, size) / 2, baseline, size);
+    const size = fitSize(ctx, runs, F1007.rightBC - F1007.left, S);
+    drawRuns(ctx, runs, F1007.rightBC, baseline, size);
   };
   const sp = n => " ".repeat(n);
   centered([
@@ -2722,29 +2723,39 @@ async function render1007Overlay(o){
   // הטקסט שמעליה, ואם הכל ארוך הגופן קטן כדי לא לעלות על החתימה.
   const B = F1007.block;
   const contact = String(f["[פרטי איש קשר]"] || "").trim();
-  // קודם מצמצמים את הרווחים שבין הכותרות, ורק אם עדיין לא נכנס — מקטינים את הגופן.
   const sections = [["התיקון יבוצע:", f["[פירוט התיקון]"]]];
   if (contact) sections.push(["איש קשר:", contact]);
+  // החתימה בצד שמאל: מתחת לראש החתימה (bottom) מותרות רק שורות קצרות (עד sideW), עד hardBottom.
+  // קודם מצמצמים רווחים, ורק אם עדיין לא נכנס — מקטינים את הגופן.
   let lay;
   for (let size = S; ; size -= 0.5){
     const lh = F1007.lineH * size / S;
     ctx.font = `400 ${size}px Heebo`;
     const wrap = t => { const l = wrapLines(ctx, t, fullW); return l.length ? l : [""]; };
     const rep = wrap(f["[שדה תיקונים]"]), vals = sections.map(([, v]) => wrap(v));
-    const textH = [rep, ...vals].reduce((h, l) => h + (l.length - 1) * lh, 0);
-    const gapsFull = sections.length * (B.headGap + B.valueGap);
-    const room = B.bottom - B.first - textH;
-    const k = Math.max(0.5, Math.min(1, room / gapsFull));
-    lay = { lh, size, rep, vals, k };
-    if (k >= 0.6 * size / S || size <= 8) break;
+    const build = k => {
+      const items = [{ lines: rep, y: B.first }];
+      let y = B.first + (rep.length - 1) * lh;
+      sections.forEach(([head], i) => {
+        const hy = y + B.headGap * k, vy = hy + B.valueGap * k;
+        items.push({ head, y: hy }, { lines: vals[i], y: vy });
+        y = vy + (vals[i].length - 1) * lh;
+      });
+      return items;
+    };
+    const fits = items => items.every(it => {
+      const rows = it.head ? [{ t: it.head, y: it.y, bold: true }] : it.lines.map((t, i) => ({ t, y: it.y + i * lh }));
+      return rows.every(r => {
+        if (r.y <= B.bottom) return true;
+        if (r.y > B.hardBottom) return false;
+        ctx.font = `${r.bold ? 700 : 400} ${r.bold ? S : size}px Heebo`;
+        return ctx.measureText(r.t).width <= B.sideW;
+      });
+    });
+    let items = null;
+    for (const k of [1, 0.9, 0.8]){ const it = build(k); if (fits(it)){ items = it; break; } }
+    if (items || size <= 8){ lay = { lh, size, items: items || build(0.8) }; break; }
   }
-  lay.items = [{ lines: lay.rep, y: B.first }];
-  let y = B.first + (lay.rep.length - 1) * lay.lh;
-  sections.forEach(([head], i) => {
-    const hy = y + B.headGap * lay.k, vy = hy + B.valueGap * lay.k;
-    lay.items.push({ head, y: hy }, { lines: lay.vals[i], y: vy });
-    y = vy + (lay.vals[i].length - 1) * lay.lh;
-  });
   for (const it of lay.items){
     if (it.head){ ctx.font = `700 ${S}px Heebo`; ctx.fillText(it.head, F1007.right, it.y); continue; }
     ctx.font = `400 ${lay.size}px Heebo`;
