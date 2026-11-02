@@ -2772,7 +2772,7 @@ function openFileShareSheet({ title, fileName, shareName, mime, blobP, message, 
     ${share ? `<button class="send-btn wa" id="sendShare" style="border-color:var(--pri);"><span class="ic">📤</span><span>שליחת הקובץ בוואטסאפ / מייל<small>הקובץ נשלח יחד עם נוסח ההודעה (הנוסח גם מועתק, למקרה שצריך להדביק)</small></span></button>`
       : `<div class="item-note" style="margin-bottom:10px;">בדפדפן הזה אין תפריט שיתוף קבצים. לחיצה על וואטסאפ או מייל תוריד את הקובץ ותפתח את השיחה — ואז מצרפים אותו (📎).</div>`}
     <button class="send-btn" id="sendWa" ${wa ? "" : 'aria-disabled="true"'}><span class="ic">💬</span><span>וואטסאפ ל${escapeHtml(c.name || "חברה")}<small>${wa ? `<span dir="ltr">${escapeHtml(c.mobile)}</span> · הקובץ יורד ונפתחת השיחה — מצרפים אותו בצ'אט` : "אין נייד בכרטיס החברה"}</small></span></button>
-    <button class="send-btn" id="sendMail" ${c.email ? "" : 'aria-disabled="true"'}><span class="ic">✉️</span><span>מייל ל${escapeHtml(c.name || "חברה")}<small>${c.email ? `<span dir="ltr">${escapeHtml(c.email)}</span> · נפתח Gmail עם מכתב מוכן והקובץ יורד — מצרפים אותו` : "אין אימייל בכרטיס החברה"}</small></span></button>
+    <button class="send-btn" id="sendMail" ${c.email ? "" : 'aria-disabled="true"'}><span class="ic">✉️</span><span>מייל ל${escapeHtml(c.name || "חברה")}<small>${c.email ? `<span dir="ltr">${escapeHtml(c.email)}</span> · נפתחת טיוטה ב-Gmail עם הקובץ כבר מצורף` : "אין אימייל בכרטיס החברה"}</small></span></button>
     <button class="send-btn" id="sendDownload"><span class="ic">⬇️</span><span>הורדת הקובץ<small>${escapeHtml(fileName)}</small></span></button>
     ${extra}`;
   const withFile = async (btn, fn) => {
@@ -2800,20 +2800,30 @@ function openFileShareSheet({ title, fileName, shareName, mime, blobP, message, 
     window.open(`https://wa.me/${wa}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
     withFile(e.currentTarget, async blob => downloadBlob(blob, fileName));
   };
-  // במחשב: נפתח Gmail באתר עם מכתב מוכן (נמען, נושא, גוף). בטלפון: אפליקציית המייל (mailto).
+  // מייל: נוצרת טיוטה ב-Gmail עם הקובץ כבר מצורף, ונפתחת בלשונית חדשה — בלי להוריד את הקובץ.
+  // בטלפון עם תפריט שיתוף: הקובץ והנוסח עוברים לאפליקציית המייל דרך התפריט.
   $("sendMail").onclick = e => {
     if (!c.email) return;
-    const su = subject || fileName, body = message + "\n\nבברכה";
+    const btn = e.currentTarget, su = subject || fileName, body = message + "\n\nבברכה";
     const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (mobile){
-      withFile(e.currentTarget, async blob => {
-        downloadBlob(blob, fileName);
-        location.href = `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(su)}&body=${encodeURIComponent(body)}`;
-      });
-      return;
+    if (mobile && share){
+      try{ navigator.clipboard?.writeText(c.email); }catch(err){}
+      toast("כתובת המייל הועתקה — בוחרים Gmail ומדביקים בשדה 'אל'");
+      return withFile(btn, async blob => navigator.share({ files: [new File([blob], shareName || asciiFileName(fileName), { type: mime })], text: body, title: su }));
     }
-    window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(c.email)}&su=${encodeURIComponent(su)}&body=${encodeURIComponent(body)}`, "_blank", "noopener");
-    withFile(e.currentTarget, async blob => { downloadBlob(blob, fileName); toast("Gmail נפתח בלשונית חדשה — גוררים אליו את הקובץ שירד 📎"); });
+    // כשיש כבר הרשאה — הלשונית נפתחת מיד (בתוך הלחיצה) כדי שהדפדפן לא יחסום אותה
+    const tab = gmCachedToken() ? window.open("about:blank", "_blank") : null;
+    withFile(btn, async blob => {
+      try{
+        const d = await gmCreateDraft({ to: c.email, subject: su, body, blob, fileName, mime });
+        const url = gmDraftUrl(d);
+        const w = tab || window.open(url, "_blank");
+        if (tab) tab.location.href = url;
+        if (!w){
+          $("sendMail").outerHTML = `<a class="send-btn" href="${url}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;"><span class="ic">✉️</span><span>הטיוטה מוכנה — פתיחה ב-Gmail<small>הקובץ כבר מצורף</small></span></a>`;
+        } else toast("נפתחה טיוטה ב-Gmail עם הקובץ מצורף ✓");
+      }catch(err){ tab?.close(); throw err; }
+    });
   };
   $("sendDownload").onclick = e => withFile(e.currentTarget, async blob => downloadBlob(blob, fileName));
   openSheet("overlaySend");
@@ -3130,7 +3140,9 @@ $("iFileInput").onchange = e => { pickFile(e.target.files[0], true); e.target.va
    מבקשים מגוגל הרשאת gmail.readonly דרך אותה התחברות של Firebase, ומקבלים טוקן לשעה.
    הטוקן נשמר רק בלשונית הזו (sessionStorage) ולא נשלח לשום מקום חוץ מ-Gmail. */
 const GM_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
-const GM_KEY = "tzahram_gm_token";
+// הרשאת טיוטות: יצירת טיוטה עם הקובץ מצורף (לא שולחת כלום בעצמה)
+const GM_SCOPE_COMPOSE = "https://www.googleapis.com/auth/gmail.compose";
+const GM_KEY = "tzahram_gm_token2";
 function gmCachedToken(){
   try{ const t = JSON.parse(sessionStorage.getItem(GM_KEY)); return t && t.exp > Date.now() ? t.token : null; }catch(e){ return null; }
 }
@@ -3139,6 +3151,7 @@ async function gmToken(force){
   if (!fbAuth) throw new Error("צריך קודם להתחבר לסנכרון");
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.addScope(GM_SCOPE);
+  provider.addScope(GM_SCOPE_COMPOSE);
   if (cloudUser?.email) provider.setCustomParameters({ login_hint: cloudUser.email });
   let res;
   try{
@@ -3166,6 +3179,48 @@ async function gmFetch(path, retried){
   }
   return r.json();
 }
+/* ---------- טיוטת Gmail עם הקובץ מצורף ----------
+   בונים מייל (נמען, נושא, גוף, קובץ) ושומרים אותו כטיוטה בתיבה — ואז פותחים אותה ב-Gmail.
+   כלום לא נשלח עד שלוחצים "שליחה" ב-Gmail. */
+const b64utf8 = s => btoa(unescape(encodeURIComponent(s)));
+const mimeWord = s => /^[\x20-\x7e]*$/.test(s) ? s.replace(/"/g, "") : `=?UTF-8?B?${b64utf8(s)}?=`;
+const wrap76 = s => s.replace(/.{1,76}/g, "$&\r\n");
+async function blobB64(blob){
+  const buf = new Uint8Array(await blob.arrayBuffer()); let s = "";
+  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+async function gmCreateDraft({ to, subject, body, blob, fileName, mime }, retried){
+  const bd = "b_" + uid();
+  const html = `<div dir="rtl" style="text-align:right">${escapeHtml(body).replace(/\n/g, "<br>")}</div>`;
+  const raw = [
+    `To: ${to}`, `Subject: ${mimeWord(subject)}`, "MIME-Version: 1.0", `Content-Type: multipart/mixed; boundary="${bd}"`, "",
+    `--${bd}`, 'Content-Type: text/html; charset="UTF-8"', "Content-Transfer-Encoding: base64", "", wrap76(b64utf8(html)),
+    `--${bd}`, `Content-Type: ${mime || "application/pdf"}; name="${mimeWord(fileName)}"`,
+    `Content-Disposition: attachment; filename="${mimeWord(fileName)}"`, "Content-Transfer-Encoding: base64", "", wrap76(await blobB64(blob)),
+    `--${bd}--`, "",
+  ].join("\r\n");
+  const token = await gmToken(retried);
+  const r = await fetch("https://gmail.googleapis.com/upload/gmail/v1/users/me/drafts?uploadType=media", {
+    method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "message/rfc822" }, body: raw,
+  });
+  if ((r.status === 401 || r.status === 403) && !retried){
+    try{ sessionStorage.removeItem(GM_KEY); }catch(e){}
+    return gmCreateDraft({ to, subject, body, blob, fileName, mime }, true);
+  }
+  if (!r.ok){
+    let msg = ""; try{ msg = (await r.json()).error?.message || ""; }catch(e){}
+    if (r.status === 403 && /has not been used|disabled/i.test(msg)) throw new Error("צריך להפעיל את Gmail API בפרויקט ב-Google Cloud");
+    if (r.status === 403) throw new Error("אין הרשאה ליצור טיוטה ב-Gmail — צריך לאשר את הגישה");
+    throw new Error(msg || "שגיאה " + r.status);
+  }
+  return r.json();
+}
+function gmDraftUrl(d){
+  const u = cloudUser?.email ? `?authuser=${encodeURIComponent(cloudUser.email)}` : "";
+  return `https://mail.google.com/mail/${u}#drafts?compose=${d?.message?.id || ""}`;
+}
+
 const GM_EXT_TYPE = { pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", heic: "image/heic", webp: "image/webp" };
 function gmAttType(p){
   const ext = String(p.filename || "").split(".").pop().toLowerCase();
