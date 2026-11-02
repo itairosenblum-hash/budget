@@ -393,6 +393,10 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
   .co-back-bar{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:8px 10px;margin:10px 0;}
   .co-back{flex:none;border:1px solid var(--border);background:var(--bg,#fff);color:var(--pri-dark,var(--pri));border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;}
   .co-back-bar .co-main{gap:0;}
+  .email-rows{display:flex;flex-direction:column;gap:6px;}
+  .email-row{display:flex;gap:6px;align-items:center;}
+  .email-row input{flex:1;min-width:0;}
+  .email-del{flex:none;width:36px;height:36px;border:1px solid var(--border);background:var(--card);border-radius:10px;color:var(--ink-soft);font:inherit;cursor:pointer;}
   .mail-pick{margin:-4px 0 10px;padding:10px;border:1px dashed var(--border);border-radius:14px;background:var(--pri-tint);}
   .mail-pick .send-btn{margin-bottom:6px;}
   .mail-pick .send-btn:last-child{margin-bottom:0;}
@@ -723,7 +727,10 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
       <div class="field"><label for="cHp">ח.פ / עוסק</label><input id="cHp" class="ltr" inputmode="numeric"></div>
       <div class="field"><label for="cContact">איש קשר</label><input id="cContact"></div>
     </div>
-    <div class="field"><label for="cEmail">אימייל <small style="font-weight:400;color:var(--ink-soft)">(כמה כתובות — מפרידים בפסיק)</small></label><input id="cEmail" type="text" class="ltr" inputmode="email" autocomplete="email" placeholder="a@x.co.il, b@x.co.il"></div>
+    <div class="field" id="cEmailField"><label>אימייל</label>
+      <div id="cEmails" class="email-rows"></div>
+      <button type="button" class="mini-btn" id="btnAddEmail" style="margin-top:6px;">＋ הוספת כתובת מייל</button>
+    </div>
     <div class="grid2">
       <div class="field"><label for="cPhone">טלפון</label><input id="cPhone" type="tel" class="ltr" inputmode="tel"></div>
       <div class="field"><label for="cMobile">נייד (וואטסאפ)</label><input id="cMobile" type="tel" class="ltr" inputmode="tel"></div>
@@ -2215,11 +2222,26 @@ $("btnDeleteBudget").onclick = () => {
 };
 
 let editingCompanyId = null;
+/* כתובות מייל בכרטיס חברה: שורה לכל כתובת, "＋" מוסיף שורה, ✕ מוחק. נשמרות יחד, מופרדות בפסיק. */
+function emailRowHtml(v){
+  return `<div class="email-row"><input type="email" class="ltr" inputmode="email" autocomplete="off" placeholder="name@company.co.il" value="${escapeHtml(v || "")}"><button type="button" class="email-del" aria-label="מחיקת הכתובת">✕</button></div>`;
+}
+function setEmailRows(list){ $("cEmails").innerHTML = (list.length ? list : [""]).map(emailRowHtml).join(""); }
+$("btnAddEmail").onclick = () => {
+  $("cEmails").insertAdjacentHTML("beforeend", emailRowHtml(""));
+  $("cEmails").lastElementChild.querySelector("input").focus();
+};
+$("cEmails").addEventListener("click", e => {
+  const d = e.target.closest(".email-del"); if (!d) return;
+  const row = d.closest(".email-row");
+  if ($("cEmails").children.length > 1) row.remove(); else row.querySelector("input").value = "";
+});
 function openCompanyForm(id){
   const c = state.companies.find(x => x.id === id);
   editingCompanyId = c ? c.id : null;
   $("companyFormTitle").textContent = c ? "עריכת חברה" : "חברה חדשה";
-  for (const [el, key] of [["cName","name"],["cHp","hp"],["cContact","contact"],["cEmail","email"],["cPhone","phone"],["cMobile","mobile"],["cNotes","notes"]]) $(el).value = c?.[key] || "";
+  setEmailRows(companyEmails(c));
+  for (const [el, key] of [["cName","name"],["cHp","hp"],["cContact","contact"],["cPhone","phone"],["cMobile","mobile"],["cNotes","notes"]]) $(el).value = c?.[key] || "";
   $("btnDeleteCompany").style.display = c ? "" : "none";
   document.querySelectorAll("#overlayCompany .field").forEach(f => f.classList.remove("invalid"));
   openSheet("overlayCompany");
@@ -2228,8 +2250,8 @@ function openCompanyForm(id){
 $("btnSaveCompany").onclick = () => {
   const name = $("cName").value.trim();
   if (!name){ $("cName").parentElement.classList.add("invalid"); toast("צריך שם חברה"); return; }
-  const emails = splitEmails($("cEmail").value);
-  if (emails.some(m => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m))){ $("cEmail").parentElement.classList.add("invalid"); toast("כתובת מייל לא תקינה — מפרידים כתובות בפסיק"); return; }
+  const emails = splitEmails([...document.querySelectorAll("#cEmails input")].map(i => i.value).join(","));
+  if (emails.some(m => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m))){ $("cEmailField").classList.add("invalid"); toast("יש כתובת מייל לא תקינה"); return; }
   const email = emails.join(", ");
   const old = state.companies.find(x => x.id === editingCompanyId) || {};
   upsert("companies", Object.assign({}, old, {
