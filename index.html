@@ -393,6 +393,10 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
   .co-back-bar{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:8px 10px;margin:10px 0;}
   .co-back{flex:none;border:1px solid var(--border);background:var(--bg,#fff);color:var(--pri-dark,var(--pri));border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;}
   .co-back-bar .co-main{gap:0;}
+  .mail-pick{margin:-4px 0 10px;padding:10px;border:1px dashed var(--border);border-radius:14px;background:var(--pri-tint);}
+  .mail-pick .send-btn{margin-bottom:6px;}
+  .mail-pick .send-btn:last-child{margin-bottom:0;}
+  .mail-pick-q{font-weight:800;font-size:14px;margin:0 2px 8px;}
   .co-btn{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:12px 12px 8px;font:inherit;color:inherit;text-align:right;cursor:pointer;}
   .co-chev{flex:none;width:18px;font-size:20px;color:var(--ink-soft);transition:transform .2s;line-height:1;}
   .co-row.open .co-chev{transform:rotate(90deg);}
@@ -719,7 +723,7 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
       <div class="field"><label for="cHp">ח.פ / עוסק</label><input id="cHp" class="ltr" inputmode="numeric"></div>
       <div class="field"><label for="cContact">איש קשר</label><input id="cContact"></div>
     </div>
-    <div class="field"><label for="cEmail">אימייל</label><input id="cEmail" type="email" class="ltr" inputmode="email" autocomplete="email"></div>
+    <div class="field"><label for="cEmail">אימייל <small style="font-weight:400;color:var(--ink-soft)">(כמה כתובות — מפרידים בפסיק)</small></label><input id="cEmail" type="text" class="ltr" inputmode="email" autocomplete="email" placeholder="a@x.co.il, b@x.co.il"></div>
     <div class="grid2">
       <div class="field"><label for="cPhone">טלפון</label><input id="cPhone" type="tel" class="ltr" inputmode="tel"></div>
       <div class="field"><label for="cMobile">נייד (וואטסאפ)</label><input id="cMobile" type="tel" class="ltr" inputmode="tel"></div>
@@ -2087,7 +2091,7 @@ function renderCompanies(){
         <span class="r-acts">
           <a class="ic-btn" ${wa ? `href="https://wa.me/${wa}" target="_blank" rel="noopener"` : `aria-disabled="true"`} title="וואטסאפ">💬</a>
           <a class="ic-btn" ${tel ? `href="tel:${escapeHtml(tel)}"` : `aria-disabled="true"`} title="חיוג">📞</a>
-          <a class="ic-btn" ${c.email ? `href="mailto:${encodeURIComponent(c.email)}"` : `aria-disabled="true"`} title="מייל">✉️</a>
+          <a class="ic-btn" ${c.email ? `href="mailto:${companyEmails(c).map(encodeURIComponent).join(",")}"` : `aria-disabled="true"`} title="מייל">✉️</a>
         </span>
       </div>
     </div>`;
@@ -2224,8 +2228,9 @@ function openCompanyForm(id){
 $("btnSaveCompany").onclick = () => {
   const name = $("cName").value.trim();
   if (!name){ $("cName").parentElement.classList.add("invalid"); toast("צריך שם חברה"); return; }
-  const email = $("cEmail").value.trim();
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ $("cEmail").parentElement.classList.add("invalid"); toast("כתובת המייל לא תקינה"); return; }
+  const emails = splitEmails($("cEmail").value);
+  if (emails.some(m => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m))){ $("cEmail").parentElement.classList.add("invalid"); toast("כתובת מייל לא תקינה — מפרידים כתובות בפסיק"); return; }
+  const email = emails.join(", ");
   const old = state.companies.find(x => x.id === editingCompanyId) || {};
   upsert("companies", Object.assign({}, old, {
     id: editingCompanyId || uid(),
@@ -2263,6 +2268,9 @@ function todayISO(){
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function companyById(id){ return state.companies.find(c => c.id === id); }
+// לחברה יכולות להיות כמה כתובות מייל (מופרדות בפסיק / נקודה-פסיק / רווח)
+function splitEmails(v){ return [...new Set(String(v || "").split(/[\s,;]+/).map(x => x.trim()).filter(Boolean))]; }
+function companyEmails(c){ return splitEmails(c?.email); }
 function budgetById(id){ return state.budgetLines.find(b => b.id === id); }
 function nextSerial(lineId){
   const nums = state.orders.filter(o => (o.budgetLineId || "") === (lineId || ""))
@@ -2765,6 +2773,7 @@ function asciiFileName(name){
 function openFileShareSheet({ title, fileName, shareName, mime, blobP, message, subject, company, extra = "" }){
   const c = company || {};
   const wa = waNumber(c.mobile);
+  const emails = companyEmails(c);
   const share = canShareFiles(mime);
   blobP.catch(() => {});
   $("sendTitle").textContent = title;
@@ -2772,7 +2781,8 @@ function openFileShareSheet({ title, fileName, shareName, mime, blobP, message, 
     ${share ? `<button class="send-btn wa" id="sendShare" style="border-color:var(--pri);"><span class="ic">📤</span><span>שליחת הקובץ בוואטסאפ / מייל<small>הקובץ נשלח יחד עם נוסח ההודעה (הנוסח גם מועתק, למקרה שצריך להדביק)</small></span></button>`
       : `<div class="item-note" style="margin-bottom:10px;">בדפדפן הזה אין תפריט שיתוף קבצים. לחיצה על וואטסאפ או מייל תוריד את הקובץ ותפתח את השיחה — ואז מצרפים אותו (📎).</div>`}
     <button class="send-btn" id="sendWa" ${wa ? "" : 'aria-disabled="true"'}><span class="ic">💬</span><span>וואטסאפ ל${escapeHtml(c.name || "חברה")}<small>${wa ? `<span dir="ltr">${escapeHtml(c.mobile)}</span> · הקובץ יורד ונפתחת השיחה — מצרפים אותו בצ'אט` : "אין נייד בכרטיס החברה"}</small></span></button>
-    <button class="send-btn" id="sendMail" ${c.email ? "" : 'aria-disabled="true"'}><span class="ic">✉️</span><span>מייל ל${escapeHtml(c.name || "חברה")}<small>${c.email ? `<span dir="ltr">${escapeHtml(c.email)}</span> · נפתחת טיוטה ב-Gmail עם הקובץ כבר מצורף` : "אין אימייל בכרטיס החברה"}</small></span></button>
+    <button class="send-btn" id="sendMail" ${emails.length ? "" : 'aria-disabled="true"'}><span class="ic">✉️</span><span>מייל ל${escapeHtml(c.name || "חברה")}<small>${emails.length > 1 ? `${emails.length} כתובות — בוחרים למי לשלוח · נפתחת טיוטה ב-Gmail עם הקובץ מצורף` : emails.length ? `<span dir="ltr">${escapeHtml(emails[0])}</span> · נפתחת טיוטה ב-Gmail עם הקובץ כבר מצורף` : "אין אימייל בכרטיס החברה"}</small></span></button>
+    <div id="mailPick" class="mail-pick" hidden></div>
     <button class="send-btn" id="sendDownload"><span class="ic">⬇️</span><span>הורדת הקובץ<small>${escapeHtml(fileName)}</small></span></button>
     ${extra}`;
   const withFile = async (btn, fn) => {
@@ -2802,12 +2812,11 @@ function openFileShareSheet({ title, fileName, shareName, mime, blobP, message, 
   };
   // מייל: נוצרת טיוטה ב-Gmail עם הקובץ כבר מצורף, ונפתחת בלשונית חדשה — בלי להוריד את הקובץ.
   // בטלפון עם תפריט שיתוף: הקובץ והנוסח עוברים לאפליקציית המייל דרך התפריט.
-  $("sendMail").onclick = e => {
-    if (!c.email) return;
-    const btn = e.currentTarget, su = subject || fileName, body = message + "\n\nבברכה";
+  const mailTo = (btn, to) => {
+    const su = subject || fileName, body = message + "\n\nבברכה";
     const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (mobile && share){
-      try{ navigator.clipboard?.writeText(c.email); }catch(err){}
+      try{ navigator.clipboard?.writeText(to); }catch(err){}
       toast("כתובת המייל הועתקה — בוחרים Gmail ומדביקים בשדה 'אל'");
       return withFile(btn, async blob => navigator.share({ files: [new File([blob], shareName || asciiFileName(fileName), { type: mime })], text: body, title: su }));
     }
@@ -2815,15 +2824,27 @@ function openFileShareSheet({ title, fileName, shareName, mime, blobP, message, 
     const tab = gmCachedToken() ? window.open("about:blank", "_blank") : null;
     withFile(btn, async blob => {
       try{
-        const d = await gmCreateDraft({ to: c.email, subject: su, body, blob, fileName, mime });
+        const d = await gmCreateDraft({ to, subject: su, body, blob, fileName, mime });
         const url = gmDraftUrl(d);
         const w = tab || window.open(url, "_blank");
         if (tab) tab.location.href = url;
         if (!w){
-          $("sendMail").outerHTML = `<a class="send-btn" href="${url}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;"><span class="ic">✉️</span><span>הטיוטה מוכנה — פתיחה ב-Gmail<small>הקובץ כבר מצורף</small></span></a>`;
+          btn.outerHTML = `<a class="send-btn" href="${url}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;"><span class="ic">✉️</span><span>הטיוטה מוכנה — פתיחה ב-Gmail<small>הקובץ כבר מצורף</small></span></a>`;
         } else toast("נפתחה טיוטה ב-Gmail עם הקובץ מצורף ✓");
       }catch(err){ tab?.close(); throw err; }
     });
+  };
+  // כתובת אחת — ישר לטיוטה. כמה כתובות — נפתחת בחירה: כל כתובת לחוד, או לכולן יחד.
+  $("sendMail").onclick = e => {
+    if (!emails.length) return;
+    if (emails.length === 1) return mailTo(e.currentTarget, emails[0]);
+    const pick = $("mailPick");
+    if (!pick.hidden){ pick.hidden = true; return; }
+    pick.innerHTML = `<div class="mail-pick-q">לאיזו כתובת לשלוח?</div>` +
+      emails.map(m => `<button class="send-btn" data-mail-to="${escapeHtml(m)}"><span class="ic">✉️</span><span dir="ltr" style="text-align:right">${escapeHtml(m)}</span></button>`).join("") +
+      `<button class="send-btn" data-mail-to="${escapeHtml(emails.join(", "))}"><span class="ic">👥</span><span>לכל הכתובות<small dir="ltr">${escapeHtml(emails.join(", "))}</small></span></button>`;
+    pick.hidden = false;
+    pick.onclick = ev => { const b = ev.target.closest("[data-mail-to]"); if (b) mailTo(b, b.dataset.mailTo); };
   };
   $("sendDownload").onclick = e => withFile(e.currentTarget, async blob => downloadBlob(blob, fileName));
   openSheet("overlaySend");
@@ -3264,7 +3285,7 @@ async function gmSearch(text, order){
     if (order){
       const c = companyById(order.companyId), tz = digitsOnly(order.tzadi);
       const since = /^\d{4}-\d{2}-\d{2}/.test(String(order.date || "")) ? ` after:${gmDay(order.date, -3)}` : " newer_than:180d";
-      const who = c ? `(${[c.email && `from:${c.email}`, c.name && `"${c.name}"`].filter(Boolean).join(" OR ")})` : "";
+      const who = c ? `(${[...companyEmails(c).map(m => `from:${m}`), c.name && `"${c.name}"`].filter(Boolean).join(" OR ")})` : "";
       const [byTz, byCo] = await Promise.all([
         tz ? gmList(`${GM_FILES}${since} "${tz}"`, 10) : [],
         who ? gmList(`${GM_FILES}${since} ${who}`, 20) : gmList(`${GM_FILES}${since}`, 20),
