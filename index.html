@@ -755,6 +755,7 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
     </div>
     <div class="field"><label for="oRepairs">אבקש לבצע את התיקונים הבאים (תאור התיקון)</label><textarea id="oRepairs" rows="3"></textarea></div>
     <div class="field"><label for="oDetails">התיקון יבוצע</label><textarea id="oDetails" rows="3"></textarea></div>
+    <div class="field"><label for="oContact">איש קשר (שם וטלפון)</label><textarea id="oContact" rows="2" placeholder="לדוגמה: איתי רוזנבלום 050-0000000"></textarea></div>
     <div class="field flag-field"><label for="oFlag"><span class="flag-ic">!</span> לטיפול שלי (משאירים ריק כשהטיפול הסתיים)</label><input id="oFlag" placeholder="לדוגמה: לבדוק מחיר / לעדכן תאריך"></div>
     <div class="field-group-title">תקציב (לא מודפס בטופס)</div>
     <div class="field"><label for="oReserve" id="oReserveLabel">סכום לשריון</label><input id="oReserve" class="ltr money" inputmode="decimal" autocomplete="off">
@@ -2348,6 +2349,12 @@ function fillDatalists(){
   $("dlVehicle").innerHTML = uniq("vehicle").map(v => `<option value="${escapeHtml(v)}">`).join("");
   $("dlUnit").innerHTML = uniq("unit").map(v => `<option value="${escapeHtml(v)}">`).join("");
 }
+// איש הקשר של ההזמנה האחרונה שהוזן בה — ברירת מחדל להזמנה חדשה
+function lastContact(){
+  const prev = state.orders.filter(o => String(o.contact || "").trim())
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0];
+  return prev ? prev.contact : "";
+}
 function openOrderForm(id, preset){
   const o = state.orders.find(x => x.id === id);
   editingOrderId = o ? o.id : null;
@@ -2376,6 +2383,7 @@ function openOrderForm(id, preset){
   $("oUnit").value = o?.unit || "";
   $("oRepairs").value = o?.repairs || "";
   $("oDetails").value = o?.details || "";
+  $("oContact").value = o ? (o.contact || "") : lastContact();
   $("oFlag").value = o?.flag || "";
   const inv = o && invoiceForOrder(o.id);
   setNum("oReserve", o?.reserve ?? null);
@@ -2453,6 +2461,7 @@ function collectOrder(){
     unit: $("oUnit").value.trim(),
     repairs: $("oRepairs").value.trim(),
     details: $("oDetails").value.trim(),
+    contact: $("oContact").value.trim(),
     flag: $("oFlag").value.trim(),
     budgetLineId: $("oBudget").value,
     reserve: numOf("oReserve"),
@@ -2497,6 +2506,7 @@ function fieldsFor(o){
     "[יחידה]": o.unit,
     "[שדה תיקונים]": o.repairs,
     "[פירוט התיקון]": o.details,
+    "[פרטי איש קשר]": o.contact || "",
   };
 }
 let templateCache = null;
@@ -2530,12 +2540,13 @@ const BG_1007_URL = "1007-bg.jpg";
 const PDF_MIME = "application/pdf";
 // מיקומים בנקודות (pt), נמדדו מהטופס המקורי. baseline = קו הבסיס של השורה.
 const F1007 = {
-  page: [612, 792], right: 539.93, left: 72,
-  lineA: { baseline: 229.41, alColon: 455.368, dateColon: 185.892 },
-  lineB: { baseline: 332.01 },
-  lineC: { baseline: 357.66 },
-  block: { first: 434.61, heading2Gap: 50.27, detailsGap: 26.68, bottom: 588 },
-  size: 12, lineH: 17.625,
+  page: [612, 792], right: 539.93, left: 72, center: 306,
+  lineA: { baseline: 229.41, alColon: 455.368, dateColon: 185.892, size: 12 },
+  lineB: { baseline: 339.9 },
+  lineC: { baseline: 368.45 },
+  // תיקונים → "התיקון יבוצע:" → פירוט → "איש קשר:" → פרטים. bottom = קו בסיס אחרון מעל החתימה
+  block: { first: 451.2, headGap: 57.1, valueGap: 28.55, bottom: 634 },
+  size: 14, lineH: 20.55,
 };
 const scriptCache = {};
 function loadScript(src){
@@ -2607,6 +2618,7 @@ async function render1007Overlay(o){
 
   // שורה 1: "אל: [שם החברה]" מימין, "תאריך: [תאריך]" משמאל
   const A = F1007.lineA;
+  { const S = A.size;
   ctx.font = `700 ${S}px Heebo`;
   const alW = ctx.measureText("אל").width, dateLabelW = ctx.measureText("תאריך").width;
   ctx.fillText("אל", A.alColon + alW, A.baseline);
@@ -2615,46 +2627,58 @@ async function render1007Overlay(o){
   drawRuns(ctx, companyRuns, A.alColon, A.baseline, fitSize(ctx, companyRuns, maxCompany, S));
   ctx.font = `700 ${S}px Heebo`;
   ctx.fillText("תאריך", A.dateColon + dateLabelW, A.baseline);
-  drawRuns(ctx, [{ t: ": " + f["[תאריך הנפקת מסמך]"] }], A.dateColon, A.baseline, S);
+  drawRuns(ctx, [{ t: ": " + f["[תאריך הנפקת מסמך]"] }], A.dateColon, A.baseline, S); }
 
-  // שורה 2: הזמנה מס' · סודר · מס' צ'  (כמו ב-Word: מימין לשמאל, עם אותם רווחים)
-  const runsB = [
-    { t: "הזמנה מס' ", b: true }, { t: `${f["[מס' הזמנה]"]}    ` },
-    { t: "סודר", b: true }, { t: ` ${f["[מס' סודר]"]}    ` },
-    { t: "מס' צ' ", b: true }, { t: `${f["[מס' צ']"]}` },
-  ];
+  // שורות 2–3 ממורכזות בעמוד, כמו ב-Word, עם אותם רווחים בין השדות
   const fullW = F1007.right - F1007.left;
-  drawRuns(ctx, runsB, F1007.right, F1007.lineB.baseline, fitSize(ctx, runsB, fullW, S));
-  // שורה 3: סוג הכלי · שעות מנוע · יחידה
-  const runsC = [
-    { t: "סוג הכלי", b: true }, { t: ` ${f["[סוג הכלי]"]}         ` },
-    { t: "שעות מנוע", b: true }, { t: ` ${f["[שעות מנוע]"]}      ` },
+  const centered = (runs, baseline) => {
+    const size = fitSize(ctx, runs, fullW, S);
+    drawRuns(ctx, runs, F1007.center + runsWidth(ctx, runs, size) / 2, baseline, size);
+  };
+  const sp = n => " ".repeat(n);
+  centered([
+    { t: "הזמנה מס' ", b: true }, { t: `${f["[מס' הזמנה]"]}${sp(12)}` },
+    { t: "סודר", b: true }, { t: ` ${f["[מס' סודר]"]}${sp(15)}` },
+    { t: "מס' צ' ", b: true }, { t: `${f["[מס' צ']"]}` },
+  ], F1007.lineB.baseline);
+  centered([
+    { t: "סוג הכלי", b: true }, { t: ` ${f["[סוג הכלי]"]}${sp(11)}` },
+    { t: "שעות מנוע", b: true }, { t: ` ${f["[שעות מנוע]"]}${sp(12)}` },
     { t: "יחידה", b: true }, { t: ` ${f["[יחידה]"]}` },
-  ];
-  drawRuns(ctx, runsC, F1007.right, F1007.lineC.baseline, fitSize(ctx, runsC, fullW, S));
+  ], F1007.lineC.baseline);
 
-  // התיקונים + "התיקון יבוצע:" + הפירוט — הכותרת השנייה זזה למטה לפי אורך התיקונים,
-  // ואם הטקסט ארוך הגופן קטן כדי לא לעלות על החתימה.
+  // התיקונים → "התיקון יבוצע:" + פירוט → "איש קשר:" + פרטים. כל כותרת זזה למטה לפי אורך
+  // הטקסט שמעליה, ואם הכל ארוך הגופן קטן כדי לא לעלות על החתימה.
   const B = F1007.block;
-  let size = S, lay;
-  for (;;){
+  const contact = String(f["[פרטי איש קשר]"] || "").trim();
+  // קודם מצמצמים את הרווחים שבין הכותרות, ורק אם עדיין לא נכנס — מקטינים את הגופן.
+  const sections = [["התיקון יבוצע:", f["[פירוט התיקון]"]]];
+  if (contact) sections.push(["איש קשר:", contact]);
+  let lay;
+  for (let size = S; ; size -= 0.5){
     const lh = F1007.lineH * size / S;
     ctx.font = `400 ${size}px Heebo`;
-    const rep = wrapLines(ctx, f["[שדה תיקונים]"], fullW);
-    const det = wrapLines(ctx, f["[פירוט התיקון]"], fullW);
-    const h2 = B.first + (Math.max(rep.length, 1) - 1) * lh + B.heading2Gap * (0.5 + 0.5 * size / S);
-    const d0 = h2 + B.detailsGap * (0.5 + 0.5 * size / S);
-    const last = d0 + (Math.max(det.length, 1) - 1) * lh;
-    lay = { rep, det, h2, d0, lh, size };
-    if (last <= B.bottom || size <= 7) break;
-    size -= 0.5;
+    const wrap = t => { const l = wrapLines(ctx, t, fullW); return l.length ? l : [""]; };
+    const rep = wrap(f["[שדה תיקונים]"]), vals = sections.map(([, v]) => wrap(v));
+    const textH = [rep, ...vals].reduce((h, l) => h + (l.length - 1) * lh, 0);
+    const gapsFull = sections.length * (B.headGap + B.valueGap);
+    const room = B.bottom - B.first - textH;
+    const k = Math.max(0.5, Math.min(1, room / gapsFull));
+    lay = { lh, size, rep, vals, k };
+    if (k >= 0.6 * size / S || size <= 8) break;
   }
-  ctx.font = `400 ${lay.size}px Heebo`;
-  lay.rep.forEach((t, i) => ctx.fillText(t, F1007.right, B.first + i * lay.lh));
-  ctx.font = `700 ${S}px Heebo`;
-  ctx.fillText("התיקון יבוצע:", F1007.right, lay.h2);
-  ctx.font = `400 ${lay.size}px Heebo`;
-  lay.det.forEach((t, i) => ctx.fillText(t, F1007.right, lay.d0 + i * lay.lh));
+  lay.items = [{ lines: lay.rep, y: B.first }];
+  let y = B.first + (lay.rep.length - 1) * lay.lh;
+  sections.forEach(([head], i) => {
+    const hy = y + B.headGap * lay.k, vy = hy + B.valueGap * lay.k;
+    lay.items.push({ head, y: hy }, { lines: lay.vals[i], y: vy });
+    y = vy + (lay.vals[i].length - 1) * lay.lh;
+  });
+  for (const it of lay.items){
+    if (it.head){ ctx.font = `700 ${S}px Heebo`; ctx.fillText(it.head, F1007.right, it.y); continue; }
+    ctx.font = `400 ${lay.size}px Heebo`;
+    it.lines.forEach((t, i) => ctx.fillText(t, F1007.right, it.y + i * lay.lh));
+  }
 
   return new Promise(res => cv.toBlob(res, "image/png"));
 }
