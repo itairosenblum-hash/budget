@@ -389,6 +389,10 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncT
   .co-list{display:flex;flex-direction:column;gap:8px;}
   .co-row{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;min-width:0;}
   .co-row.closed{opacity:.7;}
+  .co-btn.drill{padding:12px;}
+  .co-back-bar{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:8px 10px;margin:10px 0;}
+  .co-back{flex:none;border:1px solid var(--border);background:var(--bg,#fff);color:var(--pri-dark,var(--pri));border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;}
+  .co-back-bar .co-main{gap:0;}
   .co-btn{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:12px 12px 8px;font:inherit;color:inherit;text-align:right;cursor:pointer;}
   .co-chev{flex:none;width:18px;font-size:20px;color:var(--ink-soft);transition:transform .2s;line-height:1;}
   .co-row.open .co-chev{transform:rotate(90deg);}
@@ -1006,8 +1010,8 @@ function budgetFiltered(){
 function clearFilters(){
   search = ""; $("searchInput").value = "";
   if (activeTab === "budget") Object.assign(filt, { budgetStatus: "active", budgetYear: "all", needsCare: "0", expiring: "0" });
-  if (activeTab === "orders") Object.assign(filt, { ordersTab: "open", ordersYear: "all" });
-  if (activeTab === "invoices") filt.invoicesYear = "all";
+  if (activeTab === "orders") Object.assign(filt, { ordersTab: "open", ordersYear: "all", ordersCo: "" });
+  if (activeTab === "invoices") Object.assign(filt, { invoicesYear: "all", invoicesCo: "" });
   saveFilters(); render();
 }
 function saveFilters(){ try{ localStorage.setItem(FILTERS_KEY, JSON.stringify(filt)); }catch(e){} }
@@ -1029,6 +1033,30 @@ function yearBar(key, years){
       `<button class="fchip ${filt[key] === k ? "active" : ""}" data-filter="${key}" data-val="${k}">${escapeHtml(yearLabel(k))}<span class="n">${n}</span></button>`).join("") +
     `</div>`;
 }
+/* ---------- תת-תפריט לפי חברה (1007, חשבוניות) ----------
+   בלי חיפוש ובלי חברה שנבחרה — מוצגת רשימת חברות קומפקטית; הקשה נכנסת לחברה. */
+const coKeyOf = cid => cid && companyById(cid) ? cid : "_none";
+const coNameOf = k => k === "_none" ? "ללא חברה" : companyById(k)?.name || "ללא חברה";
+function groupByCo(items, cidOf){
+  const m = new Map();
+  for (const it of items){ const k = coKeyOf(cidOf(it)); if (!m.has(k)) m.set(k, []); m.get(k).push(it); }
+  return [...m.entries()].sort(([a], [b]) => (a === "_none") - (b === "_none") || coNameOf(a).localeCompare(coNameOf(b), "he"));
+}
+function coPickList(key, groups, rowInfo){
+  return `<div class="co-list">` + groups.map(([k, items]) => {
+    const { badges = "", sub = "", amt = "" } = rowInfo(items);
+    return `<div class="co-row"><button class="co-btn drill" data-filter="${key}" data-val="${k}">
+      <span class="co-chev">‹</span>
+      <span class="co-main"><span class="co-name">${escapeHtml(coNameOf(k))} ${badges}</span><span class="co-sub">${sub}</span></span>
+      <span class="co-nums"><span class="co-free tnum" style="color:var(--ink);font-size:15px;">${amt}</span></span>
+    </button></div>`;
+  }).join("") + `</div>`;
+}
+function coBackBar(key, k, info){
+  return `<div class="co-back-bar"><button class="co-back" data-filter="${key}" data-val="">→ כל החברות</button>
+    <span class="co-main"><span class="co-name">${escapeHtml(coNameOf(k))}</span><span class="co-sub">${info}</span></span></div>`;
+}
+
 // קיבוץ רשימה (שכבר ממוינת מהחדש לישן) לפי חודש, עם כותרת לכל חודש: שם, כמות וסכום
 function monthGroups(items, dateOf, sumOf, cardOf, withYear){
   const groups = [];
@@ -2313,7 +2341,10 @@ function renderOrders(){
   const isOpen = o => orderState(o) !== "done";
   const tab = filt.ordersTab === "done" ? "done" : "open";
   const nOpen = all.filter(isOpen).length, nDone = all.length - nOpen;
-  const list = all.filter(o => tab === "open" ? isOpen(o) : !isOpen(o));
+  let co = filt.ordersCo || "";
+  if (co && !all.some(o => coKeyOf(o.companyId) === co)) co = filt.ordersCo = "";
+  const inCo = o => !co || coKeyOf(o.companyId) === co;
+  const list = all.filter(o => (tab === "open" ? isOpen(o) : !isOpen(o)) && inCo(o));
   const shown = list.filter(o => {
     if (!search) return true;
     const c = companyById(o.companyId);
@@ -2321,22 +2352,35 @@ function renderOrders(){
   });
   let html = `
     <div class="seg" role="tablist" style="margin-top:6px;">
-      <button class="${tab === "open" ? "active" : ""}" data-filter="ordersTab" data-val="open">פתוחות<span class="n">${nOpen}</span></button>
-      <button class="${tab === "done" ? "active" : ""}" data-filter="ordersTab" data-val="done">טופלו<span class="n">${nDone}</span></button>
-    </div>${search || tab === "done" ? `<div style="margin-top:8px;"><button class="mini-btn" data-clear-filters>✕ ניקוי סינון</button></div>` : ""}`;
+      <button class="${tab === "open" ? "active" : ""}" data-filter="ordersTab" data-val="open">פתוחות<span class="n">${all.filter(o => isOpen(o) && inCo(o)).length}</span></button>
+      <button class="${tab === "done" ? "active" : ""}" data-filter="ordersTab" data-val="done">טופלו<span class="n">${all.filter(o => !isOpen(o) && inCo(o)).length}</span></button>
+    </div>${co ? coBackBar("ordersCo", co, `${list.length} ${tab === "open" ? "פתוחות" : "טופלו"}`) : ""}${search || tab === "done" ? `<div style="margin-top:8px;"><button class="mini-btn" data-clear-filters>✕ ניקוי סינון</button></div>` : ""}`;
   if (!all.length){
     return html + `<div class="empty"><div class="big">📄</div><p><b>עוד אין הזמנות עבודה</b></p>
       <p>לוחצים על + כדי למלא הזמנה ולהפיק טופס 1007</p></div>`;
   }
   if (!list.length) return html + `<div class="empty"><p>${tab === "open" ? "אין הזמנות פתוחות 👍" : "עוד אין הזמנות שטופלו"}</p></div>`;
   if (!shown.length) return html + `<div class="empty"><p>לא נמצאו הזמנות שמתאימות לחיפוש</p></div>`;
+  const amtOf = o => orderPrices(o)?.total || orderReserved(o) || 0;
+  // רשימת חברות (בלי חיפוש) — הקשה נכנסת להזמנות של החברה
+  if (!co && !search) return html + `<div class="section-title list-title"><span>לפי חברה <small>${new Set(list.map(o => coKeyOf(o.companyId))).size} חברות · ${list.length} הזמנות</small></span></div>` +
+    coPickList("ordersCo", groupByCo(list, o => o.companyId), os => {
+      const nStale = os.filter(staleOrder).length, nFlag = os.filter(o => o.flag).length;
+      const sum = os.reduce((t, o) => t + amtOf(o), 0);
+      return {
+        badges: (nFlag ? `<span class="flag-ic" title="${nFlag} לטיפול">!</span> ` : "") + (nStale ? `<span class="co-flag bad">${nStale} מעל חודשיים</span>` : ""),
+        sub: `${os.length} ${tab === "open" ? (os.length === 1 ? "פתוחה" : "פתוחות") : "טופלו"}`,
+        amt: sum ? fmtMoney(sum) : "",
+      };
+    });
   // קיבוץ לפי חברה; בתוך חברה — לפי תאריך (פתוחות: הישנה קודם, טופלו: החדשה קודם)
   const groups = new Map();
   for (const o of shown){ const k = companyById(o.companyId)?.name || "ללא חברה"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(o); }
   const dir = tab === "open" ? 1 : -1;
   return html + `<div class="r-grps">` + [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, "he")).map(([name, os]) => {
     os.sort((a, b) => dir * String(a.date || "").localeCompare(String(b.date || "")));
-    const sum = os.reduce((t, o) => t + (orderPrices(o)?.total || orderReserved(o) || 0), 0);
+    const sum = os.reduce((t, o) => t + amtOf(o), 0);
+    if (co) return `<div class="r-grp"><div class="r-list">${os.map(orderRowHtml).join("")}</div></div>`;
     return `<div class="r-grp"><div class="r-grp-head"><span>${escapeHtml(name)}</span><span class="tnum">${os.length}${sum ? ` · ${fmtMoney(sum)}` : ""}</span></div>
       <div class="r-list">${os.map(orderRowHtml).join("")}</div></div>`;
   }).join("") + `</div>`;
@@ -2887,7 +2931,10 @@ function barHtml(actual, reserved, amount, extraStyle = ""){
 function renderInvoices(){
   const all = [...state.invoices].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || (b._u || 0) - (a._u || 0));
   const bar = yearBar("invoicesYear", all.map(i => yearOf(i.date)));
-  const list = all.filter(i => filt.invoicesYear === "all" || yearOf(i.date) === filt.invoicesYear);
+  const inYear = all.filter(i => filt.invoicesYear === "all" || yearOf(i.date) === filt.invoicesYear);
+  let co = filt.invoicesCo || "";
+  if (co && !all.some(i => coKeyOf(i.companyId) === co)) co = filt.invoicesCo = "";
+  const list = inYear.filter(i => !co || coKeyOf(i.companyId) === co);
   const shown = list.filter(i => {
     if (!search) return true;
     const c = companyById(i.companyId), o = orderById(i.orderId);
@@ -2900,9 +2947,19 @@ function renderInvoices(){
       <span>סריקת חשבונית<small>מצלמים או בוחרים תמונה / PDF — הפרטים מתמלאים אוטומטית</small></span>
     </button>
     ${bar}
-    <div class="section-title"><span>חשבוניות${filt.invoicesYear !== "all" ? ` · ${escapeHtml(yearLabel(filt.invoicesYear))}` : ""}</span><span class="tnum">${list.length} · ${fmtMoney(sum)}</span></div>`;
+    ${co ? coBackBar("invoicesCo", co, `${list.length} מסמכים · ${fmtMoney(sum)}`) : ""}
+    <div class="section-title"><span>חשבוניות${filt.invoicesYear !== "all" ? ` · ${escapeHtml(yearLabel(filt.invoicesYear))}` : ""}${!co && !search ? " לפי חברה" : ""}</span><span class="tnum">${list.length} · ${fmtMoney(sum)}</span></div>`;
   if (!all.length) return html + `<div class="empty"><div class="big">🧾</div><p><b>עוד אין חשבוניות</b></p><p>סורקים חשבונית, או לוחצים על + להזנה ידנית</p></div>`;
-  if (!shown.length) return html + `<div class="empty"><p>לא נמצאו חשבוניות שמתאימות לחיפוש</p></div>`;
+  if (!shown.length) return html + `<div class="empty"><p>${search ? "לא נמצאו חשבוניות שמתאימות לחיפוש" : "אין חשבוניות בשנה הזו"}</p></div>`;
+  const realSum = is => is.reduce((t, i) => t + (isDeliveryNote(i) ? 0 : Number(i.total) || 0), 0);
+  if (!co && !search) return html + coPickList("invoicesCo", groupByCo(list, i => i.companyId), is => {
+    const pend = is.filter(i => i.hasFile && !i.stamped).length;
+    return {
+      badges: pend ? `<span class="co-flag">${pend} לחתימה</span>` : "",
+      sub: `${is.length} ${is.length === 1 ? "מסמך" : "מסמכים"} · אחרון ${escapeHtml(fmtDateIL(is[0].date))}`,
+      amt: fmtMoney(realSum(is)),
+    };
+  });
   return html + monthGroups(shown, i => i.date, i => i.total, i => {
     const c = companyById(i.companyId), o = orderById(i.orderId), b = budgetById(invoiceLineId(i));
     const kv = [
@@ -4026,7 +4083,7 @@ $("tabs").addEventListener("click", e => {
 });
 $("view").addEventListener("click", e => {
   const f = e.target.closest("[data-filter]");
-  if (f){ filt[f.dataset.filter] = f.dataset.val; saveFilters(); render(); return; }
+  if (f){ filt[f.dataset.filter] = f.dataset.val; saveFilters(); render(); if (/Co$/.test(f.dataset.filter)) window.scrollTo(0, 0); return; }
   if (e.target.closest("[data-clear-filters]")) return clearFilters();
   const rp = e.target.closest("#btnReportPdf"); if (rp) return budgetReportPdf(rp);
   if (e.target.closest("#btnReportXlsx")) return budgetReportXlsx();
@@ -4057,7 +4114,7 @@ $("view").addEventListener("click", e => {
   const nb = e.target.closest("[data-new-order-for]"); if (nb) return openOrderForm(null, { companyId: nb.dataset.newOrderFor });
 });
 $("searchInput").addEventListener("input", e => { search = e.target.value.trim(); render(); });
-$("btnAdd").onclick = () => activeTab === "companies" ? openCompanyForm(null) : activeTab === "orders" ? openOrderForm(null)
+$("btnAdd").onclick = () => activeTab === "companies" ? openCompanyForm(null) : activeTab === "orders" ? openOrderForm(null, filt.ordersCo && filt.ordersCo !== "_none" ? { companyId: filt.ordersCo } : undefined)
   : activeTab === "invoices" ? openInvoiceForm(null) : openLineId ? openOrderForm(null, { budgetLineId: openLineId }) : openBudgetForm(null);
 function renderMenuSummary(){
   const lines = filteredLines();
