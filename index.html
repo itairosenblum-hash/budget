@@ -2771,7 +2771,7 @@ function openFileShareSheet({ title, fileName, shareName, mime, blobP, message, 
     ${share ? `<button class="send-btn wa" id="sendShare" style="border-color:var(--pri);"><span class="ic">📤</span><span>שליחת הקובץ בוואטסאפ / מייל<small>נשלחת הודעה אחת — רק הקובץ. נוסח ההודעה מועתק, ואם רוצים מדביקים אותו ככיתוב לקובץ</small></span></button>`
       : `<div class="item-note" style="margin-bottom:10px;">בדפדפן הזה אין תפריט שיתוף קבצים. לחיצה על וואטסאפ או מייל תוריד את הקובץ ותפתח את השיחה — ואז מצרפים אותו (📎).</div>`}
     <button class="send-btn" id="sendWa" ${wa ? "" : 'aria-disabled="true"'}><span class="ic">💬</span><span>וואטסאפ ל${escapeHtml(c.name || "חברה")}<small>${wa ? `<span dir="ltr">${escapeHtml(c.mobile)}</span> · הקובץ יורד ונפתחת השיחה — מצרפים אותו בצ'אט` : "אין נייד בכרטיס החברה"}</small></span></button>
-    <button class="send-btn" id="sendMail" ${c.email ? "" : 'aria-disabled="true"'}><span class="ic">✉️</span><span>מייל ל${escapeHtml(c.name || "חברה")}<small>${c.email ? `<span dir="ltr">${escapeHtml(c.email)}</span> · הקובץ יורד ונפתח מייל — מצרפים אותו` : "אין אימייל בכרטיס החברה"}</small></span></button>
+    <button class="send-btn" id="sendMail" ${c.email ? "" : 'aria-disabled="true"'}><span class="ic">✉️</span><span>מייל ל${escapeHtml(c.name || "חברה")}<small>${c.email ? `<span dir="ltr">${escapeHtml(c.email)}</span> · נפתח Gmail עם מכתב מוכן והקובץ יורד — מצרפים אותו` : "אין אימייל בכרטיס החברה"}</small></span></button>
     <button class="send-btn" id="sendDownload"><span class="ic">⬇️</span><span>הורדת הקובץ<small>${escapeHtml(fileName)}</small></span></button>
     ${extra}`;
   const withFile = async (btn, fn) => {
@@ -2789,14 +2789,27 @@ function openFileShareSheet({ title, fileName, shareName, mime, blobP, message, 
     if (/Android/i.test(navigator.userAgent)) await navigator.share({ files: [file], text: message });
     else await navigator.share({ files: [file] });
   });
-  $("sendWa").onclick = e => withFile(e.currentTarget, async blob => {
-    downloadBlob(blob, fileName);
+  // החלון החדש נפתח מיד בלחיצה (לפני שהקובץ מוכן) — אחרת הדפדפן חוסם אותו כחלון קופץ
+  $("sendWa").onclick = e => {
+    if (!wa) return;
     window.open(`https://wa.me/${wa}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
-  });
-  $("sendMail").onclick = e => withFile(e.currentTarget, async blob => {
-    downloadBlob(blob, fileName);
-    location.href = `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(subject || fileName)}&body=${encodeURIComponent(message + "\n\nבברכה")}`;
-  });
+    withFile(e.currentTarget, async blob => downloadBlob(blob, fileName));
+  };
+  // במחשב: נפתח Gmail באתר עם מכתב מוכן (נמען, נושא, גוף). בטלפון: אפליקציית המייל (mailto).
+  $("sendMail").onclick = e => {
+    if (!c.email) return;
+    const su = subject || fileName, body = message + "\n\nבברכה";
+    const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (mobile){
+      withFile(e.currentTarget, async blob => {
+        downloadBlob(blob, fileName);
+        location.href = `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(su)}&body=${encodeURIComponent(body)}`;
+      });
+      return;
+    }
+    window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(c.email)}&su=${encodeURIComponent(su)}&body=${encodeURIComponent(body)}`, "_blank", "noopener");
+    withFile(e.currentTarget, async blob => { downloadBlob(blob, fileName); toast("Gmail נפתח בלשונית חדשה — גוררים אליו את הקובץ שירד 📎"); });
+  };
   $("sendDownload").onclick = e => withFile(e.currentTarget, async blob => downloadBlob(blob, fileName));
   openSheet("overlaySend");
 }
