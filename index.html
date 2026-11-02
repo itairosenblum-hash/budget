@@ -2328,8 +2328,9 @@ function orderRowHtml(o){
         <div class="item-actions">
           ${inv ? `<button class="mini-btn pri" data-edit-invoice="${inv.id}">🧾 החשבונית</button>` : `<button class="mini-btn pri" data-inv-for-order="${o.id}">🧾 העלאת חשבונית</button>`}
           ${inv?.stamped && !inv.stamped.manual ? `<button class="mini-btn" data-view-stamped="${inv.id}">👁️ החתומה</button>` : inv?.hasFile ? `<button class="mini-btn" data-view-invoice="${inv.id}">👁️ צפייה</button>` : ""}
+          ${inv?.stamped && !inv.stamped.manual ? `<button class="mini-btn wa" data-share-invoice="${inv.id}">📤 שליחת החשבונית החתומה</button>` : ""}
           <button class="mini-btn" data-issue-order="${o.id}">📄 1007 PDF</button>
-          <button class="mini-btn wa" data-send-order="${o.id}">📤 שליחה</button>
+          <button class="mini-btn wa" data-send-order="${o.id}">📤 ${inv?.stamped && !inv.stamped.manual ? "שליחת 1007" : "שליחה"}</button>
           <button class="mini-btn" data-edit-order="${o.id}">✏️ עריכה</button>
           <button class="mini-btn danger" data-del-order="${o.id}" aria-label="מחיקת ה-1007">🗑️</button>
         </div>
@@ -2435,7 +2436,7 @@ function openOrderForm(id, preset){
   $("oManual").style.display = inv ? "none" : "";
   $("oPriceHint").textContent = `למשל לשורות ישנות שהחשבונית שלהן לא באתר. מקלידים אחד — השני מחושב לפי מע"מ ${VAT_RATE * 100}%. מחיר כאן נחשב ניצול בפועל.`;
   $("oInvoiceRow").innerHTML = !o ? "" : inv
-    ? `<div class="item-note" style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><span>🧾 חשבונית ${escapeHtml(inv.number || "")} · ${fmtMoney(inv.total)} · ${inv.stamped ? `<b style="color:var(--good)">נבדקה והוזרמה ${escapeHtml(fmtDateIL(inv.stamped.date))}</b>` : "<b>ממתינה לחתימה</b>"}</span><span style="display:flex;gap:6px;flex:none;">${inv.stamped && !inv.stamped.manual ? `<button type="button" class="mini-btn" data-oview-inv="${inv.id}" data-st="1">👁️ החתומה</button>` : inv.hasFile ? `<button type="button" class="mini-btn" data-oview-inv="${inv.id}">👁️ צפייה</button>` : ""}<button type="button" class="mini-btn pri" data-open-inv="${inv.id}">פתיחה</button></span></div>`
+    ? `<div class="item-note" style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><span>🧾 חשבונית ${escapeHtml(inv.number || "")} · ${fmtMoney(inv.total)} · ${inv.stamped ? `<b style="color:var(--good)">נבדקה והוזרמה ${escapeHtml(fmtDateIL(inv.stamped.date))}</b>` : "<b>ממתינה לחתימה</b>"}</span><span style="display:flex;gap:6px;flex:none;">${inv.stamped && !inv.stamped.manual ? `<button type="button" class="mini-btn" data-oview-inv="${inv.id}" data-st="1">👁️ החתומה</button><button type="button" class="mini-btn wa" data-oshare-inv="${inv.id}" aria-label="שליחת החשבונית החתומה">📤</button>` : inv.hasFile ? `<button type="button" class="mini-btn" data-oview-inv="${inv.id}">👁️ צפייה</button>` : ""}<button type="button" class="mini-btn pri" data-open-inv="${inv.id}">פתיחה</button></span></div>`
     : `<button type="button" class="mini-btn pri" style="width:100%;justify-content:center;padding:10px;" data-inv-for-order="${o.id}">🧾 העלאת חשבונית להזמנה הזו</button>`;
   $("btnDeleteOrder").style.display = o ? "" : "none";
   document.querySelectorAll("#overlayOrder .field").forEach(f => f.classList.remove("invalid"));
@@ -3120,7 +3121,10 @@ async function pickFile(f, autoScan){
   if (autoScan) scanPendingFile();
 }
 // כל העלאת קובץ נקראת מיד אוטומטית (גם מ"צירוף קובץ" בתוך הטופס)
-$("oInvoiceRow").addEventListener("click", e => { const b = e.target.closest("[data-oview-inv]"); if (b) viewInvoice(b.dataset.oviewInv, !!b.dataset.st); });
+$("oInvoiceRow").addEventListener("click", e => {
+  const b = e.target.closest("[data-oview-inv]"); if (b) return viewInvoice(b.dataset.oviewInv, !!b.dataset.st);
+  const sh = e.target.closest("[data-oshare-inv]"); if (sh) return openInvoiceShare(sh.dataset.oshareInv);
+});
 $("iFileInput").onchange = e => { pickFile(e.target.files[0], true); e.target.value = ""; };
 /* ---------- משיכת קובץ מצורף מ-Gmail (קריאה בלבד) ----------
    מבקשים מגוגל הרשאת gmail.readonly דרך אותה התחברות של Firebase, ומקבלים טוקן לשעה.
@@ -4076,7 +4080,11 @@ $("btnSaveStamp").onclick = async () => {
   finally{ btn.classList.remove("busy"); }
 };
 function invoiceMessage(inv){
-  return `מצורפת חשבונית ${inv.number || ""}${companyById(inv.companyId) ? ` של ${companyById(inv.companyId).name}` : ""} — נבדקה והוזרמה${inv.stamped ? ` בתאריך ${fmtDateIL(inv.stamped.date)}` : ""}.`;
+  const o = orderById(inv.orderId);
+  const ref = o ? ` עבור הזמנת עבודה מס' ${o.number || ""}${o.serial ? ` סודר ${o.serial}` : ""}${o.tzadi ? ` (צ' ${o.tzadi})` : ""}` : "";
+  return inv.stamped
+    ? `שלום, מצורפת חשבונית ${inv.number || ""} חתומה${ref} — נבדקה והוזרמה בתאריך ${fmtDateIL(inv.stamped.date)}.`
+    : `שלום, מצורפת חשבונית ${inv.number || ""}${ref}.`;
 }
 async function openInvoiceShare(id){
   const inv = state.invoices.find(x => x.id === id); if (!inv) return;
