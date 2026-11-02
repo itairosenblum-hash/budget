@@ -2580,6 +2580,29 @@ function fieldsFor(o){
     "[פרטי איש קשר]": o.contact || DEFAULT_CONTACT,
   };
 }
+/* קובץ ה-Word חייב להישאר בעמוד אחד: בגופן 14 נכנסות כ-8 שורות טקסט בשלושת השדות החופשיים
+   (תיקונים, פירוט, איש קשר) לפני שהחתימה נדחקת לעמוד שני. מעריכים כמה שורות ייצאו,
+   ואם יותר מדי — מקטינים את הגופן של שלוש הפסקאות האלה עד שנכנס. */
+const DOCX_FREE = ["[שדה תיקונים]", "[פירוט התיקון]", "[פרטי איש קשר]"];
+function docxLines(text, pt){
+  const perLine = Math.max(10, Math.floor(468 / (pt * 0.5)));  // רוחב שורה 468pt, תו ממוצע ~0.5em (הערכה זהירה)
+  return String(text || "").split(/\r?\n/).reduce((n, l) => n + Math.max(1, Math.ceil(l.length / perLine)), 0);
+}
+function fitDocxOnePage(xml, f){
+  const budget = 8 * 14;  // 8 שורות בגובה 14pt
+  let pt = 14;
+  while (pt > 6 && DOCX_FREE.reduce((n, t) => n + docxLines(f[t], pt), 0) * pt > budget) pt -= 0.5;
+  if (pt === 14) return xml;
+  const half = Math.round(pt * 2);
+  for (const t of DOCX_FREE){
+    const i = xml.indexOf(t); if (i < 0) continue;
+    const a = xml.lastIndexOf("<w:p ", i), b = xml.indexOf("</w:p>", i);
+    if (a < 0 || b < 0) continue;
+    const para = xml.slice(a, b).replace(/<w:sz w:val="\d+"\/>/g, `<w:sz w:val="${half}"/>`).replace(/<w:szCs w:val="\d+"\/>/g, `<w:szCs w:val="${half}"/>`);
+    xml = xml.slice(0, a) + para + xml.slice(b);
+  }
+  return xml;
+}
 let templateCache = null;
 async function build1007(o){
   if (typeof JSZip === "undefined") throw new Error("ספריית JSZip לא נטענה (אין אינטרנט?)");
@@ -2589,7 +2612,7 @@ async function build1007(o){
     templateCache = await res.arrayBuffer();
   }
   const zip = await JSZip.loadAsync(templateCache);
-  let xml = await zip.file("word/document.xml").async("string");
+  let xml = fitDocxOnePage(await zip.file("word/document.xml").async("string"), fieldsFor(o));
   for (const [token, value] of Object.entries(fieldsFor(o))){
     // בקובץ ה-XML הגרש נשמר כמו שהוא, אבל ליתר ביטחון מחפשים גם את הצורה המקודדת.
     for (const t of [token, token.replace(/'/g, "&apos;")]) xml = xml.split(t).join(xmlValue(value));
@@ -2754,7 +2777,8 @@ async function render1007Overlay(o){
     });
     let items = null;
     for (const k of [1, 0.9, 0.8]){ const it = build(k); if (fits(it)){ items = it; break; } }
-    if (items || size <= 8){ lay = { lh, size, items: items || build(0.8) }; break; }
+    // תמיד עמוד אחד: אם לא נכנס — ממשיכים להקטין עד שנכנס
+    if (items || size <= 3){ lay = { lh, size, items: items || build(0.8) }; break; }
   }
   for (const it of lay.items){
     if (it.head){ ctx.font = `700 ${S}px Heebo`; ctx.fillText(it.head, F1007.right, it.y); continue; }
